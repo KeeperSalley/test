@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Задачи</title>
+  <link rel="stylesheet" href="style/head.css">
+  <link rel="stylesheet" href="style\tasks.css">
+</head>
+<body>
+    <!-- Обертка для шапки и меню -->
+    <div id="header-wrapper"></div>
+  
+  <!-- Основной контент -->
+  <div class="main-content">
+    <div class="blocks-container" id="catalogs-container">
+      <!-- Блок каталога "Мой календарь" -->
+      <div class="catalog" id="calendar-catalog">
+        <div class="catalog-header">
+          <h2 class="catalog-title">Мой календарь</h2>
+          <div class="catalog-actions">
+            <button class="btn-task" id="add-task-calendar-btn">+</button>
+          </div>
+        </div>
+        <div class="catalog-content">
+          <div id="calendar-content">
+            <!-- Задачи по датам будут добавляться сюда -->
+          </div>
+        </div>
+      </div>
+      
+      <!-- Здесь будут добавляться пользовательские каталоги -->
+    </div>
+    
+    <button class="btn-cat" id="add-catalog-btn">Создать каталог</button>
+  </div>
+
+  <!-- Модальное окно для задачи -->
+  <div class="modal" id="task-modal">
+    <div class="modal-content">
+      <h3 class="modal-title" id="task-modal-title">Новая задача</h3>
+      <input type="text" class="modal-input" id="task-input" placeholder="Введите задачу">
+      
+      <div class="task-options">
+        <!-- Сложность задачи -->
+        <div class="option-group">
+          <label class="option-label">Сложность:</label>
+          <div class="complexity-buttons">
+            <button class="complexity-btn" data-complexity="easy">Легкая</button>
+            <button class="complexity-btn" data-complexity="normal">Средняя</button>
+            <button class="complexity-btn" data-complexity="hard">Сложная</button>
+          </div>
+        </div>
+        
+        <!-- Дата выполнения -->
+        <div class="option-group">
+          <label class="option-label">Дата выполнения:</label>
+          <input type="date" class="modal-input" id="deadline-input">
+        </div>
+        
+        <!-- Повторения по дням недели -->
+        <div class="option-group">
+          <label class="option-label">Повторять по дням:</label>
+          <div class="day-buttons">
+            <button class="day-btn" data-day="mon">Пн</button>
+            <button class="day-btn" data-day="tue">Вт</button>
+            <button class="day-btn" data-day="wed">Ср</button>
+            <button class="day-btn" data-day="thu">Чт</button>
+            <button class="day-btn" data-day="fri">Пт</button>
+            <button class="day-btn" data-day="sat">Сб</button>
+            <button class="day-btn" data-day="sun">Вс</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-buttons">
+        <button class="modal-btn" id="cancel-task-btn">Отмена</button>
+        <button class="modal-btn modal-btn-primary" id="save-task-btn">Сохранить</button>
+      </div>
+      
+      <button class="delete-btn" id="delete-task-btn" style="display: none;">Удалить</button>
+    </div>
+  </div>
+
+  <!-- Модальное окно для нового каталога -->
+  <div class="modal" id="catalog-modal">
+    <div class="modal-content">
+      <h3 class="modal-title">Новый каталог</h3>
+      <input type="text" class="modal-input" id="catalog-input" placeholder="Введите название">
+      <div class="modal-buttons">
+        <button class="modal-btn" id="cancel-catalog-btn">Отмена</button>
+        <button class="modal-btn modal-btn-primary" id="save-catalog-btn">Создать</button>
+      </div>
+    </div>
+  </div>
+ 
+  
+    <script src="js/load-components-head.js"></script>
+    <script src="js/tasks_updated.js"></script>
+  </body>
+</html>
