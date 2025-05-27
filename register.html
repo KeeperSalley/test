@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация</title>
+    <link rel="stylesheet" href="style/register.css">
+</head>
+<body>
+    <div class="register-wrapper">
+        <div class="register-container">
+            <p style="color: black;">Регистрация</p>
+            <form id="registerForm">
+                <input type="text" name="login" placeholder="Введите логин..." required>
+                <input type="text" name="nickname" placeholder="Введите nickname..." required> 
+                <input type="password" name="password" placeholder="Введите пароль..." minlength="8" required>
+                <input type="password" name="password_confirm" placeholder="Повторите пароль..." required>
+                
+                <button type="submit">Зарегистрироваться</button>
+                <p class="msg" id="registerMessage"></p>
+            </form>
+        </div>
+
+        <div class="login-section">
+            <p>Если аккаунт уже есть, <a href="auth.html">войдите</a> в вашу учетную запись</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = "/api"; // Changed to relative path for API prefix
+
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const messageElement = document.getElementById('registerMessage');
+            messageElement.textContent = ''; 
+
+            const login = e.target.login.value;
+            const nickname = e.target.nickname.value;
+            const password = e.target.password.value;
+            const passwordConfirm = e.target.password_confirm.value;
+
+            if (password !== passwordConfirm) {
+                messageElement.textContent = 'Пароли не совпадают!';
+                messageElement.style.color = 'red';
+                return;
+            }
+            if (password.length < 8) {
+                messageElement.textContent = 'Пароль должен быть не менее 8 символов.';
+                messageElement.style.color = 'red';
+                return;
+            }
+
+            try {
+                console.log("Sending registration request with:", { login, nickname, password: "***" });
+                
+                const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        login: login,
+                        nickname: nickname,
+                        password: password 
+                    }),
+                });
+
+                const data = await response.json();
+                console.log("Registration response:", data);
+
+                if (response.ok) {
+                    messageElement.textContent = 'Регистрация успешна! Сейчас вы будете перенаправлены для выбора героя.';
+                    messageElement.style.color = 'green';
+                    
+                    const loginResponse = await fetch(`${API_BASE_URL}/auth/token`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            username: login, // OAuth2 still uses 'username' parameter
+                            password: password
+                        })
+                    });
+                    const loginData = await loginResponse.json();
+                    if (loginResponse.ok && loginData.access_token) {
+                        localStorage.setItem('access_token', loginData.access_token);
+                        setTimeout(() => {
+                            window.location.href = 'heros.html'; 
+                        }, 2000); 
+                    } else {
+                        messageElement.textContent = 'Регистрация успешна, но не удалось автоматически войти. Пожалуйста, войдите вручную.';
+                        messageElement.style.color = 'orange';
+                         setTimeout(() => {
+                            window.location.href = 'auth.html'; 
+                        }, 3000);
+                    }
+                } else {
+                    // Improved error handling
+                    let errorMessage = 'Неизвестная ошибка';
+                    
+                    if (data) {
+                        if (typeof data === 'object') {
+                            if (data.detail) {
+                                if (typeof data.detail === 'string') {
+                                    errorMessage = data.detail;
+                                } else if (Array.isArray(data.detail)) {
+                                    // Handle validation errors array
+                                    errorMessage = data.detail.map(err => 
+                                        `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`
+                                    ).join('; ');
+                                } else {
+                                    errorMessage = JSON.stringify(data.detail);
+                                }
+                            } else {
+                                errorMessage = JSON.stringify(data);
+                            }
+                        } else {
+                            errorMessage = String(data);
+                        }
+                    }
+                    
+                    messageElement.textContent = `Ошибка регистрации: ${errorMessage}`;
+                    messageElement.style.color = 'red';
+                    console.error('Registration error details:', data);
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                messageElement.textContent = 'Произошла ошибка при подключении к серверу.';
+                messageElement.style.color = 'red';
+            }
+        });
+    </script>
+</body>
+</html>

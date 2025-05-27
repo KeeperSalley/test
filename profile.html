@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Профиль</title>
+  <link rel="stylesheet" href="style/head.css">
+  <link rel="stylesheet" href="style/profile.css">
+</head>
+<body>
+  <!-- Обертка для шапки и меню -->
+  <div id="header-wrapper"></div>
+
+  <!-- Основной контент -->
+  <div class="main-content">
+    <div class="blocks-container">
+      <!-- Блок инвентаря -->
+      <div class="block">
+        <div class="fon">
+          <div class="title">Инвентарь:</div>
+          <div class="inventory-grid1">
+            <!-- 16 пустых слотов -->
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+          </div>
+          <button class="btn">Использовать</button>
+        </div>
+      </div>
+
+      <!-- Правый блок -->
+      <div class="block">
+        <!-- Активные бонусы -->
+        <div class="fon">
+          <div class="title">Активные бонусы:</div>
+          <div class="inventory-grid2">
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+            <div class="item empty-slot"></div>
+          </div>
+          <button class="btn">Снять</button>
+        </div>
+
+        <!-- О себе -->
+        <div class="fon">
+            <div class="about-me-content">
+              <div class="title">О себе:</div>
+              <textarea class="about-me-text" id="about-me-text" readonly>Лушай игрок</textarea>
+              <button class="btn" id="edit-btn">Изменить</button>
+            </div>
+        </div>
+      </div> 
+    </div>
+
+    <!-- Управление аккаунтом (перенесено под blocks-container) -->
+    <div class="account-actions">
+      <button class="btn" id="exit-btn">Выйти из аккаунта</button>
+      <button class="btn" id="edit_nickname-btn">Изменить никнейм</button>
+      <button class="btn" id="delete-btn">Удалить аккаунт</button>
+    </div>
+  </div>
+
+  <!-- Модальное окно редактирования "О себе" -->
+  <div class="modal" id="edit-modal">
+    <div class="modal-content">
+      <div class="title">Изменение "О себе":</div>
+      <textarea class="edit-textarea" id="edit-textarea">Лучший игрок</textarea>
+      <div class="modal-buttons">
+        <button class="btn cancel-btn" id="cancel-btn">Отмена</button>
+        <button class="btn save-btn" id="save-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно редактирования никнейма -->
+  <div class="modal" id="nickname-modal">
+    <div class="modal-content">
+      <div class="title">Изменение никнейма:</div>
+      <input type="text" class="nickname-input" id="nickname-input" value="Лучший игрок" maxlength="20">
+      <div class="modal-buttons">
+        <button class="btn cancel-btn" id="cancel-nickname-btn">Отмена</button>
+        <button class="btn save-btn" id="save-nickname-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно подтверждения удаления аккаунта -->
+  <div class="modal" id="delete-modal">
+    <div class="modal-content">
+      <div class="title">Вы уверены, что хотите удалить свой аккаунт? <br> Это действие нельзя отменить.</div>
+      <div class="modal-buttons">
+        <button class="btn cancel-btn" id="cancel-delete-btn">Отмена</button>
+        <button class="btn delete-confirm-btn" id="confirm-delete-btn" style="background-color: #c0585a;">Удалить</button>
+      </div>
+    </div>
+  </div>
+  <script src="js/btn-prof.js"></script>
+  <script src="js/load-components-head.js"></script>
+  <script src="js/profile-inventory.js"></script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Команда</title>
+  <link rel="stylesheet" href="style/head.css">
+  <link rel="stylesheet" href="style\team.css">
+</head>
+<body>
+    <!-- Обертка для шапки и меню -->
+    <div id="header-wrapper"></div>
+  
+  <!-- Основной контент -->
+  <div class="main-content">
+    <div class="blocks-container">
+      <div class="team-section">
+        <div class="fon">
+          <h2 style="margin: 0">Название команды:</h2>
+          <p>Плюшки</p>
+        </div>
+        
+        <div class="fon">
+          <div class="section-header">
+            <h2 style="margin: 0;">Участники:</h2>
+            <button class="add-member-btn" onclick="openAddMemberModal()">+
+            </button>
+          </div>
+          <ul class="team-members">
+            <li class="owner">
+              <span class="members owner">Utarna (владелец)</span>
+            </li>
+            <li>
+              <span class="members">Анигилятор 3000</span>
+              <button class="delete-member-btn" onclick="openDeleteMemberModal()">-
+              </button>
+            </li>
+            <li>
+              <span class="members">Игрок123</span>
+              <button class="delete-member-btn" onclick="openDeleteMemberModal()">-
+              </button>
+            </li>
+            <li>
+              <span class="members">Скайрим</span>
+              <button class="delete-member-btn" onclick="openDeleteMemberModal()">-
+              </button>
+            </li>
+          </ul>
+        </div>
+        
+        <div class="fon">
+          <h2 style="margin: 0">О команде:</h2>
+          <p>Фармим шмотки и голду</p>
+        </div>
+        
+        <button class="btn" onclick="openDeleteTeamModal()">Удалить команду</button>
+      </div>
+      
+      <div class="monster-card">
+        <h2 class="monster-name">Пожиратель душ</h2>
+        <h3 class="monster-level">уровень 7</h3>
+        <div class="monster-img">Изображение монстра</div>
+        
+        <div class="progress-container"> 
+          <div class="hp-colvo">855/1000</div>
+          <div class="hp-container"></div>
+        </div>
+        <div class="monster-description">"Опасное существо из глубин подземелья."</div>
+      </div>
+      
+      <div class="chat-container">
+        <p class="chat-title">Чат с участниками</p>
+        <div class="chat-box">
+          <div>Utarna: Привет всем!</div>
+          <div>Анигилятор 3000: Давно не виделись</div>
+          <div>Игрок123: Когда собираемся?</div>
+        </div>
+        <div class="chat-input-container">
+          <input type="text" class="chat-input" placeholder="Введите сообщение...">
+          <button class="send-btn" onclick="sendMessage()">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Модальное окно удаления команды -->
+  <div id="deleteTeamModal" class="modal">
+    <div class="modal-content">
+      <h3 class="modal-title">Вы уверены, что хотите удалить команду?</h3>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('deleteTeamModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="deleteTeam()">Удалить</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Модальное окно добавления участника -->
+  <div id="addMemberModal" class="modal">
+    <div class="modal-content">
+      <h3 class="modal-title">Введите никнейм участника для добавления</h3>
+      <input type="text" class="modal-input" placeholder="Никнейм">
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('addMemberModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="addMember()">Добавить</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Модальное окно удаления участника -->
+  <div id="deleteMemberModal" class="modal">
+    <div class="modal-content">
+      <h3 class="modal-title">Вы уверены, что хотите удалить участника?</h3>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('deleteMemberModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="deleteMember()">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+    <script src="js/team.js"></script>
+    <script src="js/load-components-head.js"></script>
+  </body>
+</html>
