@@ -167,6 +167,21 @@ class Team(TeamBase):
     class Config:
         orm_mode = True
 
+class TeamResponse(BaseModel):
+    team_id: int
+    name: str
+    owner_id: int
+    information: Optional[str] = None
+    boss_id: Optional[int] = None
+    boss_lives: int = 0
+    created_at: Optional[datetime] = None
+    boss: Optional[Boss] = None
+    owner: Optional[UserSimple] = None
+    members: List[UserSimple] = []
+
+    class Config:
+        orm_mode = True
+
 # Функция для получения участников команды
 def get_team_with_members(team_obj, db_session):
     """Вспомогательная функция для добавления участников в команду"""

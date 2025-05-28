@@ -165,10 +165,15 @@ def remove_user_item(db: Session, user_id: int, item_id: int):
 
 # --- Team CRUD ---
 def get_team(db: Session, team_id: int):
-    return db.query(models.Team).options(
-        joinedload(models.Team.boss),
-        joinedload(models.Team.owner)
-    ).filter(models.Team.team_id == team_id).first()
+    try:
+        return db.query(models.Team).options(
+            joinedload(models.Team.boss),
+            joinedload(models.Team.owner)
+        ).filter(models.Team.team_id == team_id).first()
+    except Exception as e:
+        print(f"Error in get_team: {e}")
+        # Попробуем без joinedload в случае ошибки
+        return db.query(models.Team).filter(models.Team.team_id == team_id).first()
 
 def get_team_by_name(db: Session, team_name: str):
     return db.query(models.Team).filter(models.Team.name == team_name).first()
@@ -181,7 +186,11 @@ def get_teams(db: Session, skip: int = 0, limit: int = 100):
 
 def get_team_members(db: Session, team_id: int):
     """Получить всех участников команды"""
-    return db.query(models.User).filter(models.User.team_id == team_id).all()
+    try:
+        return db.query(models.User).filter(models.User.team_id == team_id).all()
+    except Exception as e:
+        print(f"Error in get_team_members: {e}")
+        return []
 
 def create_team(db: Session, team: schemas.TeamCreate, owner_id: int):
     db_team = models.Team(

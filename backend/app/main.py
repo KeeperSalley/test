@@ -263,7 +263,7 @@ def get_team_details(team_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Team not found")
     return db_team
 
-@api_router.get("/teams/my-team")
+@api_router.get("/teams/my-team", response_model=schemas.TeamResponse)
 def get_my_team(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user)
@@ -278,21 +278,21 @@ def get_my_team(
     # Получаем участников команды
     members = crud.get_team_members(db, team.team_id)
     
-    # Формируем ответ
-    team_dict = {
-        "team_id": team.team_id,
-        "name": team.name,
-        "owner_id": team.owner_id,
-        "information": team.information,
-        "boss_id": team.boss_id,
-        "boss_lives": team.boss_lives,
-        "created_at": team.created_at,
-        "boss": team.boss,
-        "owner": team.owner,
-        "members": [schemas.UserSimple.from_orm(member) for member in members]
-    }
+    # Создаем объект TeamResponse
+    team_response = schemas.TeamResponse(
+        team_id=team.team_id,
+        name=team.name,
+        owner_id=team.owner_id,
+        information=team.information,
+        boss_id=team.boss_id,
+        boss_lives=team.boss_lives,
+        created_at=team.created_at,
+        boss=team.boss,
+        owner=team.owner,
+        members=[schemas.UserSimple.from_orm(member) for member in members]
+    )
     
-    return team_dict
+    return team_response
 
 @api_router.put("/teams/{team_id}", response_model=schemas.Team)
 def update_team(
