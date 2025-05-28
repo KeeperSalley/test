@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Enum, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -25,9 +26,11 @@ class User(Base):
 
     # Relationships
     class_info = relationship("Class", back_populates="users")
-    team = relationship("Team", back_populates="members")
+    team = relationship("Team", foreign_keys=[team_id], back_populates="members")
+    owned_teams = relationship("Team", foreign_keys="Team.owner_id", back_populates="owner")
     items = relationship("UserItem", back_populates="user")
     catalogs = relationship("Catalog", back_populates="user")
+    chat_messages = relationship("ChatMessage", back_populates="user")
 
 class Item(Base):
     __tablename__ = "items"
@@ -72,14 +75,17 @@ class Team(Base):
 
     team_id = Column(Integer, primary_key=True, index=True)
     name = Column(String(63), nullable=False)
-    owner = Column(Integer, nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     information = Column(String(255), nullable=True)
     boss_id = Column(Integer, ForeignKey("bosses.boss_id"), nullable=True)
     boss_lives = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    members = relationship("User", back_populates="team")
+    owner = relationship("User", foreign_keys=[owner_id], back_populates="owned_teams")
+    members = relationship("User", foreign_keys="User.team_id", back_populates="team")
     boss = relationship("Boss", back_populates="teams")
+    chat_messages = relationship("ChatMessage", back_populates="team")
 
 class Boss(Base):
     __tablename__ = "bosses"
@@ -89,6 +95,8 @@ class Boss(Base):
     base_lives = Column(Integer, nullable=False)
     information = Column(String, nullable=True)
     level = Column(Integer, default=1)
+    gold_reward = Column(Integer, default=100)  # Добавлено поле для награды
+    img_url = Column(String(255), nullable=True)  # Добавлено поле для изображения
 
     # Relationships
     teams = relationship("Team", back_populates="boss")
@@ -127,3 +135,17 @@ class DailyTask(Base):
 
     # Relationships
     task = relationship("Task", back_populates="daily_tasks")
+
+# Новая модель для сообщений чата
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    message_id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.team_id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    message = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    team = relationship("Team", back_populates="chat_messages")
+    user = relationship("User", back_populates="chat_messages")

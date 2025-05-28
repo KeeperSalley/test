@@ -50,6 +50,7 @@ async def get_current_active_user(current_user: models.User = Depends(get_curren
 
 api_router = APIRouter()
 
+# --- Authentication endpoints ---
 @api_router.post("/auth/register", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user_by_nickname = crud.get_user_by_nickname(db, nickname=user.nickname)
@@ -75,6 +76,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+# --- User endpoints ---
 @api_router.get("/users/me", response_model=schemas.User)
 async def read_users_me(current_user: models.User = Depends(get_current_active_user)):
     return current_user
@@ -111,8 +113,7 @@ def get_class_details(class_id: int, db: Session = Depends(get_db)):
     return db_class
 
 # --- Item endpoints ---
-
-@api_router.get("/items", response_model=List[schemas.Item])  # Убрал завершающий слеш
+@api_router.get("/items", response_model=List[schemas.Item])
 def get_all_items_in_shop(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_items(db, skip=skip, limit=limit)
 
@@ -132,14 +133,14 @@ async def buy_item(
     # Получаем предмет из базы данных
     item_to_buy = crud.get_item(db, item_id=buy_request.item_id)
     item_data = {
-    "item_id": item_to_buy.item_id,
-    "name": item_to_buy.name,
-    "price": item_to_buy.price,
-    "information": item_to_buy.information,
-    "type": item_to_buy.type,
-    "class_id": item_to_buy.class_id,
-    "bonus_type": item_to_buy.bonus_type,
-    "bonus_data": item_to_buy.bonus_data
+        "item_id": item_to_buy.item_id,
+        "name": item_to_buy.name,
+        "price": item_to_buy.price,
+        "information": item_to_buy.information,
+        "type": item_to_buy.type,
+        "class_id": item_to_buy.class_id,
+        "bonus_type": item_to_buy.bonus_type,
+        "bonus_data": item_to_buy.bonus_data
     }
     if item_to_buy is None:
         raise HTTPException(
@@ -152,7 +153,7 @@ async def buy_item(
     if existing_user_item:
         return schemas.BuyItemResponse(
             success=True,
-            message=f"Successfully purchased {item_to_buy.name}",
+            message=f"You already have {item_to_buy.name}",
             user_gold=current_user.gold,
             item=item_data
         )
@@ -160,8 +161,8 @@ async def buy_item(
     # Проверяем, достаточно ли у пользователя золота
     if current_user.gold < item_to_buy.price:
         return schemas.BuyItemResponse(
-            success=True,
-            message=f"Successfully purchased {item_to_buy.name}",
+            success=False,
+            message=f"Not enough gold to buy {item_to_buy.name}",
             user_gold=current_user.gold,
             item=item_data
         )
@@ -169,8 +170,8 @@ async def buy_item(
     # Проверяем, соответствует ли предмет классу пользователя (если это классовый предмет)
     if item_to_buy.class_id is not None and item_to_buy.class_id != current_user.class_id:
         return schemas.BuyItemResponse(
-            success=True,
-            message=f"Successfully purchased {item_to_buy.name}",
+            success=False,
+            message=f"This item is not for your class",
             user_gold=current_user.gold,
             item=item_data
         )
@@ -213,18 +214,6 @@ async def buy_item(
 def get_my_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     return crud.get_user_items(db, user_id=current_user.user_id, skip=skip, limit=limit)
 
-@api_router.post("/user-items/buy/{item_id}", response_model=schemas.UserItem)
-def buy_item_from_shop(item_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
-    item_to_buy = crud.get_item(db, item_id=item_id)
-    if item_to_buy is None:
-        raise HTTPException(status_code=404, detail="Item not found in shop")
-    if current_user.gold < item_to_buy.price:
-        raise HTTPException(status_code=400, detail="Not enough gold")
-    crud.update_user_gold_xp(db, user_id=current_user.user_id, gold_change=-item_to_buy.price)
-    user_item = crud.add_item_to_user_inventory(db, user_id=current_user.user_id, item_id=item_id)
-    db.refresh(current_user)
-    return user_item
-
 @api_router.put("/user-items/{item_id}/toggle-active", response_model=schemas.UserItem)
 def toggle_item_active_status(
     item_id: int, 
@@ -240,16 +229,28 @@ def toggle_item_active_status(
     updated_user_item = crud.update_user_item_active_status(
         db=db, user_id=current_user.user_id, item_id=item_id, active=active_status.active
     )
+    if updated_user_item is None:
+        raise HTTPException(status_code=400, detail="Cannot activate more than 3 items")
     db.refresh(current_user)
     return updated_user_item
 
 # --- Team endpoints ---
 @api_router.post("/teams", response_model=schemas.Team, status_code=status.HTTP_201_CREATED)
-def create_team(team: schemas.TeamCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
-    # Set current user as owner if not specified
-    if not team.owner:
-        team.owner = current_user.user_id
-    return crud.create_team(db=db, team=team)
+def create_team(
+    team: schemas.TeamCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Проверяем, что пользователь не в команде
+    if current_user.team_id is not None:
+        raise HTTPException(status_code=400, detail="You are already in a team")
+    
+    # Проверяем, что команда с таким именем не существует
+    existing_team = crud.get_team_by_name(db, team.name)
+    if existing_team:
+        raise HTTPException(status_code=400, detail="Team with this name already exists")
+    
+    return crud.create_team(db=db, team=team, owner_id=current_user.user_id)
 
 @api_router.get("/teams", response_model=List[schemas.Team])
 def get_all_teams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -261,6 +262,189 @@ def get_team_details(team_id: int, db: Session = Depends(get_db)):
     if db_team is None:
         raise HTTPException(status_code=404, detail="Team not found")
     return db_team
+
+@api_router.get("/teams/my-team")
+def get_my_team(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    if not current_user.team_id:
+        raise HTTPException(status_code=404, detail="You are not in a team")
+    
+    team = crud.get_team(db, current_user.team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Получаем участников команды
+    members = crud.get_team_members(db, team.team_id)
+    
+    # Формируем ответ
+    team_dict = {
+        "team_id": team.team_id,
+        "name": team.name,
+        "owner_id": team.owner_id,
+        "information": team.information,
+        "boss_id": team.boss_id,
+        "boss_lives": team.boss_lives,
+        "created_at": team.created_at,
+        "boss": team.boss,
+        "owner": team.owner,
+        "members": [schemas.UserSimple.from_orm(member) for member in members]
+    }
+    
+    return team_dict
+
+@api_router.put("/teams/{team_id}", response_model=schemas.Team)
+def update_team(
+    team_id: int,
+    team_update: schemas.TeamUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    team = crud.get_team(db, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Проверяем, что пользователь - владелец команды
+    if team.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only team owner can update team details")
+    
+    # Проверяем уникальность имени команды, если оно изменяется
+    if team_update.name and team_update.name != team.name:
+        existing_team = crud.get_team_by_name(db, team_update.name)
+        if existing_team:
+            raise HTTPException(status_code=400, detail="Team with this name already exists")
+    
+    updated_team = crud.update_team(db, team_id, team_update)
+    return updated_team
+
+@api_router.delete("/teams/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_team(
+    team_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    team = crud.get_team(db, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Проверяем, что пользователь - владелец команды
+    if team.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only team owner can delete team")
+    
+    crud.delete_team(db, team_id)
+    return {"detail": "Team deleted successfully"}
+
+@api_router.post("/teams/join")
+def join_team(
+    join_request: schemas.JoinTeamRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Проверяем, что пользователь не в команде
+    if current_user.team_id is not None:
+        raise HTTPException(status_code=400, detail="You are already in a team")
+    
+    # Ищем команду по имени
+    team = crud.get_team_by_name(db, join_request.team_name)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Добавляем пользователя в команду
+    result = crud.add_member_to_team(db, team.team_id, current_user.user_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Failed to join team")
+    
+    return {"message": f"Successfully joined team '{team.name}'"}
+
+@api_router.post("/teams/{team_id}/leave")
+def leave_team(
+    team_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Проверяем, что пользователь в этой команде
+    if current_user.team_id != team_id:
+        raise HTTPException(status_code=400, detail="You are not in this team")
+    
+    team = crud.get_team(db, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Если пользователь - владелец команды, нужно передать права или удалить команду
+    if team.owner_id == current_user.user_id:
+        # Проверяем, есть ли другие участники
+        members_count = crud.get_team_members_count(db, team_id)
+        if members_count > 1:
+            raise HTTPException(
+                status_code=400, 
+                detail="As team owner, you must either transfer ownership or delete the team"
+            )
+        else:
+            # Если владелец единственный участник, удаляем команду
+            crud.delete_team(db, team_id)
+            return {"message": "Team deleted as you were the only member"}
+    
+    # Пользователь покидает команду
+    crud.leave_team(db, current_user.user_id)
+    return {"message": "Successfully left the team"}
+
+@api_router.post("/teams/{team_id}/add-member")
+def add_member(
+    team_id: int,
+    add_request: schemas.AddMemberRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    team = crud.get_team(db, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Проверяем, что пользователь - владелец команды
+    if team.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only team owner can add members")
+    
+    # Ищем пользователя по никнейму
+    user_to_add = crud.get_user_by_nickname(db, add_request.nickname)
+    if not user_to_add:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Проверяем, что пользователь не в команде
+    if user_to_add.team_id is not None:
+        raise HTTPException(status_code=400, detail="User is already in a team")
+    
+    # Добавляем пользователя в команду
+    result = crud.add_member_to_team(db, team_id, user_to_add.user_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Failed to add member")
+    
+    return {"message": f"Successfully added {add_request.nickname} to the team"}
+
+@api_router.post("/teams/{team_id}/remove-member")
+def remove_member(
+    team_id: int,
+    remove_request: schemas.RemoveMemberRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    team = crud.get_team(db, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Проверяем, что пользователь - владелец команды
+    if team.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only team owner can remove members")
+    
+    # Проверяем, что удаляемый пользователь не владелец
+    if remove_request.user_id == current_user.user_id:
+        raise HTTPException(status_code=400, detail="Team owner cannot remove themselves")
+    
+    # Удаляем пользователя из команды
+    result = crud.remove_member_from_team(db, team_id, remove_request.user_id, current_user.user_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Failed to remove member or member not in team")
+    
+    return {"message": "Successfully removed member from the team"}
 
 # --- Boss endpoints ---
 @api_router.post("/bosses", response_model=schemas.Boss, status_code=status.HTTP_201_CREATED)
@@ -278,77 +462,91 @@ def get_boss_details(boss_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Boss not found")
     return db_boss
 
-class BossAttackResult(schemas.BaseModel):
-    message: str
-    player_damage_done: int
-    boss_damage_taken: int
-    boss_current_health: int
-    boss_defeated: bool
-    rewards_granted: Optional[Dict[str, Any]] = None
-
-@api_router.post("/bosses/{boss_id}/attack", response_model=BossAttackResult)
-def attack_boss(boss_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
-    boss = crud.get_boss(db, boss_id=boss_id)
+@api_router.post("/teams/{team_id}/attack-boss", response_model=schemas.BossAttackResult)
+def attack_team_boss(
+    team_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Проверяем, что пользователь в этой команде
+    if current_user.team_id != team_id:
+        raise HTTPException(status_code=403, detail="You are not a member of this team")
+    
+    team = crud.get_team(db, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    if not team.boss_id:
+        raise HTTPException(status_code=400, detail="Team has no boss to fight")
+    
+    if team.boss_lives <= 0:
+        raise HTTPException(status_code=400, detail="Boss is already defeated")
+    
+    boss = team.boss
     if not boss:
         raise HTTPException(status_code=404, detail="Boss not found")
     
-    # Get team if user is in one
-    team = None
-    if current_user.team_id:
-        team = crud.get_team(db, team_id=current_user.team_id)
-        if team and team.boss_id != boss_id:
-            raise HTTPException(status_code=400, detail="Your team is fighting a different boss")
+    # Вычисляем урон
+    damage = current_user.attack
     
-    # Check if boss has health
-    boss_health = team.boss_lives if team else boss.base_lives
-    if boss_health <= 0:
-        raise HTTPException(status_code=400, detail="This boss has already been defeated")
+    # Наносим урон боссу
+    new_lives = max(0, team.boss_lives - damage)
+    team.boss_lives = new_lives
     
-    # Calculate damage
-    player_damage_to_boss = max(1, current_user.attack)
-    boss_damage_to_player = max(1, boss.level * 5)  # Simple formula based on boss level
-    
-    # Apply damage
-    if team:
-        crud.update_team_boss_lives(db, team_id=team.team_id, lives_change=-player_damage_to_boss)
-        db.refresh(team)
-        boss_health = team.boss_lives
-    else:
-        # For solo fights, we'll just simulate without storing
-        boss_health -= player_damage_to_boss
-    
-    # Apply damage to player
-    current_user.lives = max(0, current_user.lives - boss_damage_to_player)
-    db.commit()
-    db.refresh(current_user)
-    
-    message = f"You attacked {boss.name} for {player_damage_to_boss} damage. {boss.name} attacked you for {boss_damage_to_player} damage."
-    rewards_granted = None
     boss_defeated = False
+    rewards = None
     
-    # Check if boss is defeated
-    if boss_health <= 0:
+    # Проверяем победу над боссом
+    if new_lives == 0:
         boss_defeated = True
-        message += f" {boss.name} has been defeated!"
-        
-        # Calculate rewards
-        xp_reward = boss.level * 50
-        gold_reward = boss.level * 30
-        
-        # Grant rewards
-        crud.update_user_gold_xp(db, user_id=current_user.user_id, gold_change=gold_reward, points_change=xp_reward)
-        rewards_granted = {"experience": xp_reward, "gold": gold_reward, "items": []}
-        
-        db.refresh(current_user)
+        defeat_result = crud.defeat_boss(db, team_id)
+        if defeat_result:
+            rewards = {
+                "gold": defeat_result["gold_reward"],
+                "members_rewarded": defeat_result["members_count"]
+            }
     
-    return BossAttackResult(
-        message=message,
-        player_damage_done=player_damage_to_boss,
-        boss_damage_taken=player_damage_to_boss,
-        boss_current_health=boss_health,
+    db.commit()
+    
+    return schemas.BossAttackResult(
+        message=f"You dealt {damage} damage to {boss.name}!",
+        player_damage_done=damage,
+        boss_damage_taken=damage,
+        boss_current_health=new_lives,
         boss_defeated=boss_defeated,
-        rewards_granted=rewards_granted
+        rewards_granted=rewards
     )
+
+# --- Chat endpoints ---
+@api_router.get("/teams/{team_id}/chat", response_model=List[schemas.ChatMessage])
+def get_team_chat(
+    team_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Проверяем, что пользователь в этой команде
+    if current_user.team_id != team_id:
+        raise HTTPException(status_code=403, detail="You are not a member of this team")
+    
+    messages = crud.get_team_chat_messages(db, team_id, skip, limit)
+    return messages[::-1]  # Возвращаем в хронологическом порядке
+
+@api_router.post("/teams/{team_id}/chat", response_model=schemas.ChatMessage)
+def send_chat_message(
+    team_id: int,
+    message: schemas.ChatMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Проверяем, что пользователь в этой команде
+    if current_user.team_id != team_id:
+        raise HTTPException(status_code=403, detail="You are not a member of this team")
+    
+    # Создаем сообщение
+    db_message = crud.create_chat_message(db, team_id, current_user.user_id, message.message)
+    return db_message
 
 # --- Catalog endpoints ---
 @api_router.post("/catalogs/", response_model=schemas.Catalog, status_code=status.HTTP_201_CREATED)
@@ -413,6 +611,83 @@ def delete_task(task_id: int, db: Session = Depends(get_db), current_user: model
     crud.delete_task(db, task_id=task_id)
     return {"detail": "Task deleted successfully"}
 
+@api_router.put("/tasks/{task_id}", response_model=schemas.Task)
+def update_task(
+    task_id: int, 
+    task_update: schemas.TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Verify task belongs to user
+    task = crud.get_task(db, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
+    if not catalog or catalog.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this task")
+    
+    # Handle task completion rewards
+    if task_update.completed == 'true' and task.completed == 'false':
+        rewards = {
+            "easy": [10, 20],
+            "normal": [30, 40],
+            "hard": [50, 80]
+        }
+        crud.update_user_gold_xp(
+            db, 
+            user_id=current_user.user_id,
+            gold_change=rewards[task.complexity][0],
+            points_change=rewards[task.complexity][1]
+        )
+    
+    updated_task = crud.update_task(db, task_id=task_id, task_update=task_update)
+    return updated_task
+
+@api_router.patch("/tasks/{task_id}/completion", response_model=schemas.Task)
+def update_task_completion(
+    task_id: int, 
+    completed_status: schemas.TaskUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Verify task belongs to user's catalog
+    task = crud.get_task(db, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
+    if not catalog or catalog.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this task")
+    
+    if completed_status.completed is None:
+        raise HTTPException(status_code=400, detail="Completed status must be provided ('true' or 'false')")
+    
+    # Используем обновленную функцию, которая наносит урон боссу
+    updated_task = crud.update_task_completion(
+        db=db, 
+        task_id=task_id, 
+        completed=completed_status.completed, 
+        user_id=current_user.user_id
+    )
+    
+    # Выдаем награды за выполнение задачи
+    if completed_status.completed == 'true':
+        rewards = {
+            "easy": [10, 20],
+            "normal": [30, 40],
+            "hard": [50, 80]
+        }
+        
+        crud.update_user_gold_xp(
+            db,
+            user_id=current_user.user_id,
+            gold_change=rewards[task.complexity][0],
+            points_change=rewards[task.complexity][1]
+        )
+    
+    return updated_task
+
 # --- DailyTask endpoints ---
 @api_router.post("/daily-tasks/", response_model=schemas.DailyTask, status_code=status.HTTP_201_CREATED)
 def create_daily_task(daily_task: schemas.DailyTaskCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -440,104 +715,76 @@ def get_task_daily_tasks(task_id: int, db: Session = Depends(get_db), current_us
     
     return crud.get_task_daily_tasks(db, task_id=task_id)
 
-@api_router.put("/tasks/{task_id}", response_model=schemas.Task)
-def update_task(
-    task_id: int, 
-    task_update: schemas.TaskUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user)
+# --- WebSocket для чата ---
+class TeamConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[int, List[WebSocket]] = {}
+    
+    async def connect(self, websocket: WebSocket, team_id: int):
+        await websocket.accept()
+        if team_id not in self.active_connections:
+            self.active_connections[team_id] = []
+        self.active_connections[team_id].append(websocket)
+    
+    def disconnect(self, websocket: WebSocket, team_id: int):
+        if team_id in self.active_connections:
+            if websocket in self.active_connections[team_id]:
+                self.active_connections[team_id].remove(websocket)
+            if not self.active_connections[team_id]:
+                del self.active_connections[team_id]
+    
+    async def send_to_team(self, message: str, team_id: int):
+        if team_id in self.active_connections:
+            for connection in self.active_connections[team_id]:
+                try:
+                    await connection.send_text(message)
+                except:
+                    # Удаляем неактивные соединения
+                    if connection in self.active_connections[team_id]:
+                        self.active_connections[team_id].remove(connection)
+
+team_manager = TeamConnectionManager()
+
+@api_router.websocket("/ws/team-chat/{team_id}/{token}")
+async def team_chat_websocket(
+    websocket: WebSocket, 
+    team_id: int, 
+    token: str, 
+    db: Session = Depends(get_db)
 ):
-    # Verify task belongs to user
-    task = crud.get_task(db, task_id=task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+    try:
+        # Проверяем токен
+        user = await get_current_user(token=token, db=db)
+        
+        # Проверяем, что пользователь в команде
+        if user.team_id != team_id:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+            
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     
-    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
-    if not catalog or catalog.user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this task")
+    await team_manager.connect(websocket, team_id)
     
-    # Handle task completion rewards
-    if task_update.completed is True and not task.completed:
-        crud.update_user_gold_xp(
-            db, 
-            user_id=current_user.user_id,
-            gold_change=task.gold_reward,
-            points_change=task.experience_reward
-        )
-    
-    updated_task = crud.update_task(db, task_id=task_id, task_update=task_update)
-    return updated_task
+    try:
+        while True:
+            data = await websocket.receive_text()
+            
+            # Сохраняем сообщение в базе данных
+            message = crud.create_chat_message(db, team_id, user.user_id, data)
+            
+            # Отправляем сообщение всем участникам команды
+            formatted_message = f"{user.nickname}: {data}"
+            await team_manager.send_to_team(formatted_message, team_id)
+            
+    except WebSocketDisconnect:
+        team_manager.disconnect(websocket, team_id)
+    except Exception as e:
+        print(f"Error in team chat websocket: {e}")
+        team_manager.disconnect(websocket, team_id)
 
-
-@api_router.patch("/tasks/{task_id}/completion", response_model=schemas.Task)
-def update_task_completion(
-    task_id: int, 
-    completed_status: schemas.TaskUpdate, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_active_user)
-):
-    # Verify task belongs to user's catalog
-    task = crud.get_task(db, task_id=task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
-    if not catalog or catalog.user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this task")
-    
-    if completed_status.completed is None:
-        raise HTTPException(status_code=400, detail="Completed status must be provided ('true' or 'false')")
-    
-    rewards = {
-        "easy": [10, 20],
-        "normal": [30, 40],
-        "hard": [50, 80]
-    }
-    
-    updated_task = crud.update_task_completion(db=db, task_id=task_id, completed=completed_status.completed)
-    crud.update_user_gold_xp(
-        db,
-        user_id=current_user.user_id,
-        gold_change=rewards[task.complexity][0],
-        points_change=rewards[task.complexity][1])
-    return updated_task
-
-
-# @api_router.post("/tasks/{task_id}/complete", response_model=schemas.Task)
-# def complete_task(
-#     task_id: int,
-#     db: Session = Depends(get_db),
-#     current_user: models.User = Depends(get_current_active_user)
-# ):
-#     task = crud.get_task(db, task_id=task_id)
-#     if not task:
-#         raise HTTPException(status_code=404, detail="Task not found")
-    
-#     catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
-#     if not catalog or catalog.user_id != current_user.user_id:
-#         raise HTTPException(status_code=403, detail="Not authorized to complete this task")
-    
-#     if task.completed:
-#         raise HTTPException(status_code=400, detail="Task already completed")
-    
-#     # Grant rewards
-#     crud.update_user_gold_xp(
-#         db,
-#         user_id=current_user.user_id,
-#         gold_change=task.gold_reward,
-#         points_change=task.experience_reward
-#     )
-    
-#     # Mark task as completed
-#     updated_task = crud.update_task(
-#         db,
-#         task_id=task_id,
-#         task_update=schemas.TaskUpdate(completed=True)
-#     )
-    
-#     return updated_task
-
-# --- Chat functionality ---
+# --- Старый чат WebSocket (сохраняем для совместимости) ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -584,8 +831,6 @@ async def websocket_endpoint(websocket: WebSocket, room_name: str, token: str, d
     try:
         while True:
             data = await websocket.receive_text()
-            # Store message in database (simplified for now)
-            # crud.create_chat_message(db=db, msg=ChatMessageBase(message=data), user_id=user.user_id, nickname=user.nickname)
             await manager.broadcast(f"{user.nickname}: {data}", room_name)
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_name)
@@ -595,8 +840,10 @@ async def websocket_endpoint(websocket: WebSocket, room_name: str, token: str, d
         manager.disconnect(websocket, room_name)
         await manager.broadcast(f"User {user.nickname} disconnected due to an error.", room_name)
 
+# Подключаем API роутер
 app.include_router(api_router, prefix="/api")
 
+# Обслуживание фронтенда
 @app.get("/{path:path}", response_class=HTMLResponse)
 async def serve_frontend_page(request: Request, path: str):
     file_path = os.path.join(FRONTEND_DIR, path)

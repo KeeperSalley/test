@@ -1,9 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func, and_
 from . import models, schemas, security
 import json
-import random # For boss attack simulation
+import random
+from typing import Optional, List
 
 # --- User CRUD --- 
 def get_user(db: Session, user_id: int):
@@ -55,8 +57,29 @@ def update_user_gold_xp(db: Session, user_id: int, gold_change: int = 0, points_
         while db_user.points >= db_user.max_points:
             db_user.points -= db_user.max_points
             db_user.level += 1
-            db_user.max_points = 100 * db_user.level  # Формула опыта для уровней
+            db_user.max_points = 100 * db_user.level
             
+        db.commit()
+        db.refresh(db_user)
+    return db_user
+
+def leave_team(db: Session, user_id: int):
+    """Пользователь покидает команду"""
+    db_user = get_user(db, user_id)
+    if db_user and db_user.team_id:
+        team_id = db_user.team_id
+        db_user.team_id = None
+        
+        # Проверяем, остались ли участники в команде
+        remaining_members = db.query(models.User).filter(models.User.team_id == team_id).count()
+        
+        # Если команда пустая, удаляем её
+        if remaining_members == 0:
+            delete_team(db, team_id)
+        else:
+            # Проверяем боссов для оставшихся участников
+            update_team_boss(db, team_id)
+        
         db.commit()
         db.refresh(db_user)
     return db_user
@@ -102,7 +125,6 @@ def get_user_items(db: Session, user_id: int, skip: int = 0, limit: int = 100):
     ).filter(models.UserItem.user_id == user_id).offset(skip).limit(limit).all()
 
 def add_item_to_user_inventory(db: Session, user_id: int, item_id: int):
-    # Check if user already has this item
     existing_item = get_user_item(db, user_id, item_id)
     if existing_item:
         return existing_item
@@ -114,53 +136,22 @@ def add_item_to_user_inventory(db: Session, user_id: int, item_id: int):
     return db_user_item
 
 def get_active_items_count(db: Session, user_id: int):
-    """Получить количество активных предметов у пользователя"""
     return db.query(models.UserItem).filter(
         models.UserItem.user_id == user_id,
         models.UserItem.active == 'true'
     ).count()
-
 
 def update_user_item_active_status(db: Session, user_id: int, item_id: int, active: str):
     db_user_item = get_user_item(db, user_id, item_id)
     if not db_user_item:
         return None
 
-    # Если активируем предмет, проверяем количество уже активных предметов
     if active == 'true':
-        # Получаем количество активных предметов
         active_count = get_active_items_count(db, user_id)
-        
-        # Если уже 3 активных предмета, не позволяем активировать еще один
         if active_count >= 3:
             return None
     
-    # Устанавливаем статус активности
     db_user_item.active = active
-    
-    db.commit()
-    db.refresh(db_user_item)
-    return db_user_item
-
-
-    # If activating an item, deactivate other items of the same type
-    if active == 'true':
-        item = get_item(db, item_id)
-        if item:
-            currently_active = db.query(models.UserItem).join(models.Item).filter(
-                models.UserItem.user_id == user_id,
-                models.UserItem.active == 'true',
-                models.Item.type == item.type,
-                models.UserItem.item_id != item_id
-            ).all()
-            
-            for old_item in currently_active:
-                old_item.active = 'false'
-                # Apply item bonus removal logic here if needed
-    
-    db_user_item.active = active
-    # Apply item bonus logic here if needed
-    
     db.commit()
     db.refresh(db_user_item)
     return db_user_item
@@ -174,17 +165,117 @@ def remove_user_item(db: Session, user_id: int, item_id: int):
 
 # --- Team CRUD ---
 def get_team(db: Session, team_id: int):
-    return db.query(models.Team).filter(models.Team.team_id == team_id).first()
+    return db.query(models.Team).options(
+        joinedload(models.Team.boss),
+        joinedload(models.Team.owner)
+    ).filter(models.Team.team_id == team_id).first()
+
+def get_team_by_name(db: Session, team_name: str):
+    return db.query(models.Team).filter(models.Team.name == team_name).first()
 
 def get_teams(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Team).offset(skip).limit(limit).all()
+    return db.query(models.Team).options(
+        joinedload(models.Team.boss),
+        joinedload(models.Team.owner)
+    ).offset(skip).limit(limit).all()
 
-def create_team(db: Session, team: schemas.TeamCreate):
-    db_team = models.Team(**team.dict())
+def get_team_members(db: Session, team_id: int):
+    """Получить всех участников команды"""
+    return db.query(models.User).filter(models.User.team_id == team_id).all()
+
+def create_team(db: Session, team: schemas.TeamCreate, owner_id: int):
+    db_team = models.Team(
+        name=team.name,
+        information=team.information,
+        owner_id=owner_id
+    )
     db.add(db_team)
     db.commit()
     db.refresh(db_team)
+    
+    # Добавляем владельца в команду
+    owner = get_user(db, owner_id)
+    if owner:
+        owner.team_id = db_team.team_id
+        db.commit()
+    
     return db_team
+
+def update_team(db: Session, team_id: int, team_update: schemas.TeamUpdate):
+    db_team = get_team(db, team_id)
+    if not db_team:
+        return None
+    
+    update_data = team_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_team, key, value)
+    
+    db.commit()
+    db.refresh(db_team)
+    return db_team
+
+def delete_team(db: Session, team_id: int):
+    db_team = get_team(db, team_id)
+    if db_team:
+        # Удаляем всех участников из команды
+        db.query(models.User).filter(models.User.team_id == team_id).update({"team_id": None})
+        
+        # Удаляем сообщения чата
+        db.query(models.ChatMessage).filter(models.ChatMessage.team_id == team_id).delete()
+        
+        # Удаляем команду
+        db.delete(db_team)
+        db.commit()
+    return db_team
+
+def add_member_to_team(db: Session, team_id: int, user_id: int):
+    """Добавить участника в команду"""
+    user = get_user(db, user_id)
+    team = get_team(db, team_id)
+    
+    if not user or not team:
+        return None
+        
+    if user.team_id is not None:
+        return None  # Пользователь уже в команде
+    
+    user.team_id = team_id
+    db.commit()
+    
+    # Обновляем босса команды
+    update_team_boss(db, team_id)
+    
+    db.refresh(user)
+    return user
+
+def remove_member_from_team(db: Session, team_id: int, user_id: int, remover_id: int):
+    """Удалить участника из команды"""
+    team = get_team(db, team_id)
+    user = get_user(db, user_id)
+    
+    if not team or not user or user.team_id != team_id:
+        return None
+    
+    # Проверяем права на удаление (только владелец может удалять)
+    if team.owner_id != remover_id:
+        return None
+    
+    # Нельзя удалить владельца
+    if user_id == team.owner_id:
+        return None
+    
+    user.team_id = None
+    db.commit()
+    
+    # Обновляем босса команды
+    update_team_boss(db, team_id)
+    
+    db.refresh(user)
+    return user
+
+def get_team_members_count(db: Session, team_id: int):
+    """Получить количество участников команды"""
+    return db.query(models.User).filter(models.User.team_id == team_id).count()
 
 def update_team_boss_lives(db: Session, team_id: int, lives_change: int):
     db_team = get_team(db, team_id)
@@ -195,6 +286,57 @@ def update_team_boss_lives(db: Session, team_id: int, lives_change: int):
         db.commit()
         db.refresh(db_team)
     return db_team
+
+def update_team_boss(db: Session, team_id: int):
+    """Обновить босса команды на основе количества участников и их уровней"""
+    team = get_team(db, team_id)
+    if not team:
+        return None
+    
+    # Получаем всех участников команды
+    members = get_team_members(db, team_id)
+    
+    if len(members) < 2:
+        # Если участников меньше 2, убираем босса
+        team.boss_id = None
+        team.boss_lives = 0
+    else:
+        # Вычисляем средний уровень участников
+        avg_level = sum(member.level for member in members) / len(members)
+        avg_level = int(round(avg_level))
+        
+        # Определяем ID босса на основе среднего уровня
+        boss_id = get_boss_id_by_level(avg_level)
+        
+        # Если босс изменился или его нет, назначаем нового
+        if team.boss_id != boss_id:
+            boss = get_boss(db, boss_id)
+            if boss:
+                team.boss_id = boss_id
+                team.boss_lives = boss.base_lives
+    
+    db.commit()
+    db.refresh(team)
+    return team
+
+def get_boss_id_by_level(avg_level: int) -> int:
+    """Определить ID босса на основе среднего уровня команды"""
+    if avg_level <= 10:
+        return 1
+    elif avg_level <= 20:
+        return 2
+    elif avg_level <= 30:
+        return 3
+    elif avg_level <= 40:
+        return 4
+    elif avg_level <= 50:
+        return 5
+    elif avg_level <= 60:
+        return 6
+    elif avg_level <= 70:
+        return 7
+    else:
+        return 8
 
 # --- Boss CRUD ---
 def create_boss(db: Session, boss: schemas.BossCreate):
@@ -209,6 +351,52 @@ def get_boss(db: Session, boss_id: int):
 
 def get_bosses(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Boss).offset(skip).limit(limit).all()
+
+def defeat_boss(db: Session, team_id: int):
+    """Обработка победы над боссом"""
+    team = get_team(db, team_id)
+    if not team or not team.boss_id:
+        return None
+    
+    boss = team.boss
+    if not boss:
+        return None
+    
+    # Выдаем награду всем участникам команды
+    members = db.query(models.User).filter(models.User.team_id == team_id).all()
+    for member in members:
+        update_user_gold_xp(db, member.user_id, gold_change=boss.gold_reward)
+    
+    # Обновляем босса команды (появляется новый)
+    update_team_boss(db, team_id)
+    
+    return {"boss_defeated": True, "gold_reward": boss.gold_reward, "members_count": len(members)}
+
+# --- Chat CRUD ---
+def create_chat_message(db: Session, team_id: int, user_id: int, message: str):
+    """Создать сообщение в чате команды"""
+    db_message = models.ChatMessage(
+        team_id=team_id,
+        user_id=user_id,
+        message=message
+    )
+    db.add(db_message)
+    db.commit()
+    db.refresh(db_message)
+    return db_message
+
+def get_team_chat_messages(db: Session, team_id: int, skip: int = 0, limit: int = 50):
+    """Получить сообщения чата команды"""
+    return db.query(models.ChatMessage).options(
+        joinedload(models.ChatMessage.user)
+    ).filter(
+        models.ChatMessage.team_id == team_id
+    ).order_by(models.ChatMessage.timestamp.desc()).offset(skip).limit(limit).all()
+
+def delete_team_chat_messages(db: Session, team_id: int):
+    """Удалить все сообщения чата команды"""
+    db.query(models.ChatMessage).filter(models.ChatMessage.team_id == team_id).delete()
+    db.commit()
 
 # --- Catalog CRUD ---
 def get_catalog(db: Session, catalog_id: int):
@@ -239,8 +427,7 @@ def get_catalog_tasks(db: Session, catalog_id: int, skip: int = 0, limit: int = 
     return db.query(models.Task).filter(models.Task.catalog_id == catalog_id).offset(skip).limit(limit).all()
 
 def create_task(db: Session, task: schemas.TaskCreate):
-    # Исключаем поля experience_reward и gold_reward, которых нет в модели Task
-    task_data = task.dict(exclude={"experience_reward", "gold_reward", "repeat_days"})
+    task_data = task.dict(exclude={"repeat_days"})
     db_task = models.Task(**task_data)
     db.add(db_task)
     db.commit()
@@ -260,21 +447,41 @@ def update_task(db: Session, task_id: int, task_update: schemas.TaskUpdate):
     db.refresh(db_task)
     return db_task
 
-def update_task_completion(db: Session, task_id: int, completed: str):
+def update_task_completion(db: Session, task_id: int, completed: str, user_id: int):
+    """Обновить статус выполнения задачи и нанести урон боссу"""
     db_task = get_task(db, task_id=task_id)
     if not db_task:
         return None
+    
+    # Получаем пользователя
+    user = get_user(db, user_id)
+    if not user:
+        return None
+    
+    # Если задача выполнена и пользователь в команде, наносим урон боссу
+    if completed == 'true' and user.team_id:
+        team = get_team(db, user.team_id)
+        if team and team.boss_id and team.boss_lives > 0:
+            # Урон зависит от атаки пользователя и сложности задачи
+            complexity_multiplier = {'easy': 1, 'normal': 1.5, 'hard': 2}
+            damage = int(user.attack * complexity_multiplier.get(db_task.complexity, 1))
+            
+            # Наносим урон боссу
+            new_lives = max(0, team.boss_lives - damage)
+            team.boss_lives = new_lives
+            
+            # Если босс побежден
+            if new_lives == 0:
+                defeat_boss(db, team.team_id)
     
     db_task.completed = completed
     db.commit()
     db.refresh(db_task)
     return db_task
 
-
 def delete_task(db: Session, task_id: int):
     db_task = get_task(db, task_id)
     if db_task:
-        # First delete any associated daily tasks
         db.query(models.DailyTask).filter(models.DailyTask.task_id == task_id).delete()
         db.delete(db_task)
         db.commit()

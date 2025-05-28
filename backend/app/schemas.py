@@ -66,6 +66,17 @@ class User(UserBase):
     class Config:
         orm_mode = True
 
+# Упрощенная схема пользователя для команд
+class UserSimple(BaseModel):
+    user_id: int
+    nickname: str
+    level: int
+    attack: int
+    img: Optional[str] = None
+    
+    class Config:
+        orm_mode = True
+
 # --- Item Schemas ---
 class ItemBase(BaseModel):
     name: str
@@ -114,41 +125,93 @@ class UserItem(UserItemBase):
 class UserItemUpdate(BaseModel):
     active: Optional[Literal['true', 'false']] = None
 
-# --- Team Schemas ---
-class TeamBase(BaseModel):
-    name: str = Field(..., max_length=63)
-    owner: int
-    information: Optional[str] = Field(None, max_length=255)
-    boss_id: Optional[int] = None
-    boss_lives: int = 0
-
-class TeamCreate(TeamBase):
-    pass
-
-class Team(TeamBase):
-    team_id: int
-    boss: Optional['Boss'] = None
-    members: List['User'] = []
-
-    class Config:
-        orm_mode = True
-
 # --- Boss Schemas ---
 class BossBase(BaseModel):
     name: str
     base_lives: int = Field(..., gt=0)
     information: Optional[str] = None
     level: int = 1
+    gold_reward: int = 100
+    img_url: Optional[str] = None
 
 class BossCreate(BossBase):
     pass
 
 class Boss(BossBase):
     boss_id: int
-    teams: List[Team] = []
 
     class Config:
         orm_mode = True
+
+# --- Team Schemas ---
+class TeamBase(BaseModel):
+    name: str = Field(..., max_length=63)
+    information: Optional[str] = Field(None, max_length=255)
+
+class TeamCreate(TeamBase):
+    pass
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=63)
+    information: Optional[str] = Field(None, max_length=255)
+
+class Team(TeamBase):
+    team_id: int
+    owner_id: int
+    boss_id: Optional[int] = None
+    boss_lives: int = 0
+    created_at: datetime
+    boss: Optional[Boss] = None
+    owner: Optional[UserSimple] = None
+
+    class Config:
+        orm_mode = True
+
+# Функция для получения участников команды
+def get_team_with_members(team_obj, db_session):
+    """Вспомогательная функция для добавления участников в команду"""
+    from . import crud
+    members = crud.get_team_members(db_session, team_obj.team_id)
+    return {
+        **team_obj.__dict__,
+        "members": [UserSimple.from_orm(member) for member in members]
+    }
+
+# --- Chat Message Schemas ---
+class ChatMessageBase(BaseModel):
+    message: str = Field(..., max_length=1000)
+
+class ChatMessageCreate(ChatMessageBase):
+    pass
+
+class ChatMessage(ChatMessageBase):
+    message_id: int
+    team_id: int
+    user_id: int
+    timestamp: datetime
+    user: Optional[UserSimple] = None
+
+    class Config:
+        orm_mode = True
+
+# --- Team Management Schemas ---
+class AddMemberRequest(BaseModel):
+    nickname: str = Field(..., min_length=1, max_length=17)
+
+class RemoveMemberRequest(BaseModel):
+    user_id: int
+
+class JoinTeamRequest(BaseModel):
+    team_name: str = Field(..., max_length=63)
+
+# --- Boss Attack Schemas ---
+class BossAttackResult(BaseModel):
+    message: str
+    player_damage_done: int
+    boss_damage_taken: int
+    boss_current_health: int
+    boss_defeated: bool
+    rewards_granted: Optional[Dict[str, Any]] = None
 
 # --- Catalog Schemas ---
 class CatalogBase(BaseModel):
@@ -203,7 +266,6 @@ class TaskUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=127)
     complexity: Optional[Literal['easy', 'normal', 'hard']] = None
     deadline: Optional[date] = None
-    completed: Optional[bool] = None
     completed: Optional[Literal['true', 'false']] = None     
 
 # Упрощенная схема Task для использования в DailyTask
