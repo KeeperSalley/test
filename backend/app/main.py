@@ -235,33 +235,6 @@ def toggle_item_active_status(
     return updated_user_item
 
 # --- Team endpoints ---
-@api_router.post("/teams", response_model=schemas.Team, status_code=status.HTTP_201_CREATED)
-def create_team(
-    team: schemas.TeamCreate, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_active_user)
-):
-    # Проверяем, что пользователь не в команде
-    if current_user.team_id is not None:
-        raise HTTPException(status_code=400, detail="You are already in a team")
-    
-    # Проверяем, что команда с таким именем не существует
-    existing_team = crud.get_team_by_name(db, team.name)
-    if existing_team:
-        raise HTTPException(status_code=400, detail="Team with this name already exists")
-    
-    return crud.create_team(db=db, team=team, owner_id=current_user.user_id)
-
-@api_router.get("/teams", response_model=List[schemas.Team])
-def get_all_teams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return crud.get_teams(db, skip=skip, limit=limit)
-
-@api_router.get("/teams/{team_id}", response_model=schemas.Team)
-def get_team_details(team_id: int, db: Session = Depends(get_db)):
-    db_team = crud.get_team(db, team_id=team_id)
-    if db_team is None:
-        raise HTTPException(status_code=404, detail="Team not found")
-    return db_team
 
 @api_router.get("/teams/my-team", response_model=schemas.TeamResponse)
 def get_my_team(
@@ -293,6 +266,34 @@ def get_my_team(
     )
     
     return team_response
+
+@api_router.post("/teams", response_model=schemas.Team, status_code=status.HTTP_201_CREATED)
+def create_team(
+    team: schemas.TeamCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Проверяем, что пользователь не в команде
+    if current_user.team_id is not None:
+        raise HTTPException(status_code=400, detail="You are already in a team")
+    
+    # Проверяем, что команда с таким именем не существует
+    existing_team = crud.get_team_by_name(db, team.name)
+    if existing_team:
+        raise HTTPException(status_code=400, detail="Team with this name already exists")
+    
+    return crud.create_team(db=db, team=team, owner_id=current_user.user_id)
+
+@api_router.get("/teams", response_model=List[schemas.Team])
+def get_all_teams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_teams(db, skip=skip, limit=limit)
+
+@api_router.get("/teams/{team_id}", response_model=schemas.Team)
+def get_team_details(team_id: int, db: Session = Depends(get_db)):
+    db_team = crud.get_team(db, team_id=team_id)
+    if db_team is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+    return db_team
 
 @api_router.put("/teams/{team_id}", response_model=schemas.Team)
 def update_team(

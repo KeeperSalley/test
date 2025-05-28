@@ -22,7 +22,7 @@ class Class(ClassBase):
     class_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- User Schemas ---
 class UserBase(BaseModel):
@@ -64,7 +64,7 @@ class User(UserBase):
     img: Optional[str] = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Упрощенная схема пользователя для команд
 class UserSimple(BaseModel):
@@ -75,7 +75,7 @@ class UserSimple(BaseModel):
     img: Optional[str] = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Item Schemas ---
 class ItemBase(BaseModel):
@@ -95,7 +95,7 @@ class Item(ItemBase):
     class_info: Optional[Class] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         
 class BuyItemRequest(BaseModel):
     item_id: int
@@ -120,7 +120,7 @@ class UserItem(UserItemBase):
     user: Optional[User] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserItemUpdate(BaseModel):
     active: Optional[Literal['true', 'false']] = None
@@ -141,7 +141,7 @@ class Boss(BossBase):
     boss_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Team Schemas ---
 class TeamBase(BaseModel):
@@ -165,7 +165,7 @@ class Team(TeamBase):
     owner: Optional[UserSimple] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class TeamResponse(BaseModel):
     team_id: int
@@ -180,7 +180,7 @@ class TeamResponse(BaseModel):
     members: List[UserSimple] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Функция для получения участников команды
 def get_team_with_members(team_obj, db_session):
@@ -207,7 +207,7 @@ class ChatMessage(ChatMessageBase):
     user: Optional[UserSimple] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Team Management Schemas ---
 class AddMemberRequest(BaseModel):
@@ -241,7 +241,7 @@ class Catalog(CatalogBase):
     tasks: List['Task'] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Task Schemas ---
 class TaskBase(BaseModel):
@@ -264,7 +264,7 @@ class DailyTaskSimple(DailyTaskBase):
     daily_task_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Полная схема Task с упрощенными DailyTask
 class Task(TaskBase):
@@ -272,7 +272,7 @@ class Task(TaskBase):
     daily_tasks: List[DailyTaskSimple] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         
 class TaskCreate(TaskBase):
     repeat_days: Optional[List[Literal['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']]] = None
@@ -288,7 +288,7 @@ class TaskSimple(TaskBase):
     task_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Полная схема DailyTask с упрощенной Task
 class DailyTask(DailyTaskBase):
@@ -296,4 +296,4 @@ class DailyTask(DailyTaskBase):
     task: Optional[TaskSimple] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
