@@ -96,8 +96,95 @@
       </div>
     </div>
   </div>
+
+  <!-- Модальные окна -->
   
-    <script src="js/team.js"></script>
-    <script src="js/load-components-head.js"></script>
-  </body>
+  <!-- Модальное окно создания команды -->
+  <div id="createTeamModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Создание команды</div>
+      <input type="text" class="modal-input" id="create-team-name" placeholder="Название команды" maxlength="63">
+      <textarea class="modal-input" id="create-team-info" placeholder="Описание команды (необязательно)" maxlength="255"></textarea>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('createTeamModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="createTeam()">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно присоединения к команде -->
+  <div id="joinTeamModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Присоединение к команде</div>
+      <input type="text" class="modal-input" id="join-team-name" placeholder="Название команды" maxlength="63">
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('joinTeamModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="joinTeam()">Присоединиться</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно добавления участника -->
+  <div id="addMemberModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Добавление участника</div>
+      <input type="text" class="modal-input" id="add-member-nickname" placeholder="Никнейм участника" maxlength="17">
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('addMemberModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="addMember()">Добавить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно удаления участника -->
+  <div id="removeMemberModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Удаление участника</div>
+      <p id="remove-member-text">Вы уверены, что хотите удалить участника из команды?</p>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('removeMemberModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="confirmRemoveMember()">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно удаления команды -->
+  <div id="deleteTeamModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Удаление команды</div>
+      <p>Вы уверены, что хотите удалить команду? Это действие нельзя отменить.</p>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('deleteTeamModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="deleteTeam()">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно редактирования названия команды -->
+  <div id="editTeamNameModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Изменение названия команды</div>
+      <input type="text" class="modal-input" id="edit-team-name-input" placeholder="Новое название" maxlength="63">
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('editTeamNameModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="saveTeamName()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно редактирования информации о команде -->
+  <div id="editTeamInfoModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Изменение описания команды</div>
+      <textarea class="modal-input" id="edit-team-info-input" placeholder="Новое описание" maxlength="255"></textarea>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeModal('editTeamInfoModal')">Отмена</button>
+        <button class="modal-btn confirm" onclick="saveTeamInfo()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="js/team.js"></script>
+  <script src="js/load-components-head.js"></script>
+</body>
 </html>

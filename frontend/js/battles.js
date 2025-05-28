@@ -6,7 +6,39 @@ if (typeof window.API_BASE_URL === 'undefined') {
 // Инициализация страницы
 document.addEventListener('DOMContentLoaded', function() {
   setupEventListeners();
+  checkUserTeamStatus(); // Добавляем проверку статуса команды
 });
+
+// Проверка статуса команды пользователя
+async function checkUserTeamStatus() {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      window.location.href = 'auth.html';
+      return;
+    }
+
+    const response = await fetch(`${window.API_BASE_URL}/teams/my-team`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+
+    if (response.ok) {
+      // Пользователь уже в команде - показываем кнопку "Моя команда"
+      const teamNavSection = document.querySelector('.team-nav-section');
+      if (teamNavSection) {
+        teamNavSection.style.display = 'block';
+      }
+    } else if (response.status === 404) {
+      // Пользователь не в команде - скрываем кнопку "Моя команда"
+      const teamNavSection = document.querySelector('.team-nav-section');
+      if (teamNavSection) {
+        teamNavSection.style.display = 'none';
+      }
+    }
+  } catch (error) {
+    console.error('Error checking team status:', error);
+  }
+}
 
 // Настройка обработчиков событий
 function setupEventListeners() {
@@ -27,7 +59,9 @@ function setupEventListeners() {
   
   document.getElementById('team-name-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
-      createTeam();
+      if (!e.shiftKey) { // Shift+Enter для новой строки в описании
+        createTeam();
+      }
     }
   });
   
@@ -104,7 +138,7 @@ async function joinTeam() {
       // Через 2 секунды перенаправляем на страницу команды
       setTimeout(() => {
         closeModal('findTeamModal');
-        goToTeamPage();
+        window.location.href = 'team.html'; // Прямое перенаправление
       }, 2000);
       
     } else {
@@ -151,16 +185,19 @@ async function createTeam() {
     });
     
     if (response.ok) {
+      const newTeam = await response.json();
+      console.log('Team created successfully:', newTeam);
       showMessage(messageEl, 'Команда успешно создана!', 'success');
       
       // Через 2 секунды перенаправляем на страницу команды
       setTimeout(() => {
         closeModal('createTeamModal');
-        goToTeamPage();
+        window.location.href = 'team.html'; // Прямое перенаправление
       }, 2000);
       
     } else {
       const error = await response.json();
+      console.error('Team creation error:', error);
       showMessage(messageEl, error.detail || 'Ошибка создания команды', 'error');
     }
     

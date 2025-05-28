@@ -16,12 +16,16 @@ document.addEventListener('DOMContentLoaded', async function() {
   try {
     const token = localStorage.getItem('access_token');
     if (!token) {
+      console.error('No access token found');
       window.location.href = 'auth.html';
       return;
     }
     
+    console.log('Initializing team page...');
+    
     // Получаем информацию о текущем пользователе
     await fetchCurrentUser();
+    console.log('Current user:', currentUser);
     
     // Загружаем информацию о команде
     await loadTeamInfo();
@@ -45,12 +49,15 @@ async function fetchCurrentUser() {
     
     if (response.ok) {
       currentUser = await response.json();
+      console.log('User fetched successfully:', currentUser);
     } else {
+      console.error('Failed to fetch user info:', response.status, response.statusText);
       throw new Error('Failed to fetch user info');
     }
   } catch (error) {
     console.error('Error fetching user info:', error);
     showError('Ошибка получения информации о пользователе');
+    throw error;
   }
 }
 
@@ -58,18 +65,27 @@ async function fetchCurrentUser() {
 async function loadTeamInfo() {
   try {
     const token = localStorage.getItem('access_token');
+    console.log('Fetching team info...');
+    
     const response = await fetch(`${window.API_BASE_URL}/teams/my-team`, {
       headers: { "Authorization": `Bearer ${token}` }
     });
     
+    console.log('Team info response status:', response.status);
+    
     if (response.ok) {
       currentTeam = await response.json();
+      console.log('Team info loaded:', currentTeam);
       displayTeamInfo();
       connectToChat();
     } else if (response.status === 404) {
+      console.log('User is not in a team');
       // Пользователь не в команде
       showNoTeamMessage();
     } else {
+      console.error('Failed to fetch team info:', response.status, response.statusText);
+      const errorData = await response.text();
+      console.error('Error response:', errorData);
       throw new Error('Failed to fetch team info');
     }
   } catch (error) {
@@ -80,20 +96,41 @@ async function loadTeamInfo() {
 
 // Отображение информации об отсутствии команды
 function showNoTeamMessage() {
-  document.getElementById('no-team-message').style.display = 'block';
-  document.getElementById('team-content').style.display = 'none';
+  console.log('Showing no team message');
+  const noTeamMessage = document.getElementById('no-team-message');
+  const teamContent = document.getElementById('team-content');
+  
+  if (noTeamMessage && teamContent) {
+    noTeamMessage.style.display = 'block';
+    teamContent.style.display = 'none';
+  } else {
+    console.error('No team message or team content elements not found');
+  }
 }
 
 // Отображение информации о команде
 function displayTeamInfo() {
-  document.getElementById('no-team-message').style.display = 'none';
-  document.getElementById('team-content').style.display = 'block';
+  console.log('Displaying team info:', currentTeam);
+  
+  const noTeamMessage = document.getElementById('no-team-message');
+  const teamContent = document.getElementById('team-content');
+  
+  if (noTeamMessage && teamContent) {
+    noTeamMessage.style.display = 'none';
+    teamContent.style.display = 'block';
+  }
   
   // Название команды
-  document.getElementById('team-name-value').textContent = currentTeam.name;
+  const teamNameValue = document.getElementById('team-name-value');
+  if (teamNameValue) {
+    teamNameValue.textContent = currentTeam.name || 'Без названия';
+  }
   
   // Информация о команде
-  document.getElementById('team-info-value').textContent = currentTeam.information || 'Нет описания';
+  const teamInfoValue = document.getElementById('team-info-value');
+  if (teamInfoValue) {
+    teamInfoValue.textContent = currentTeam.information || 'Нет описания';
+  }
   
   // Участники команды
   displayTeamMembers();
@@ -102,20 +139,28 @@ function displayTeamInfo() {
   displayBossInfo();
   
   // Показываем кнопки управления в зависимости от роли
+  const ownerActions = document.getElementById('owner-actions');
+  const memberActions = document.getElementById('member-actions');
+  const addMemberBtn = document.getElementById('add-member-btn');
+  const editTeamNameBtn = document.getElementById('edit-team-name-btn');
+  const editTeamInfoBtn = document.getElementById('edit-team-info-btn');
+  
   if (currentTeam.owner_id === currentUser.user_id) {
     // Пользователь - владелец
-    document.getElementById('owner-actions').style.display = 'block';
-    document.getElementById('member-actions').style.display = 'none';
-    document.getElementById('add-member-btn').style.display = 'block';
-    document.getElementById('edit-team-name-btn').style.display = 'inline';
-    document.getElementById('edit-team-info-btn').style.display = 'inline';
+    if (ownerActions) ownerActions.style.display = 'block';
+    if (memberActions) memberActions.style.display = 'none';
+    if (addMemberBtn) addMemberBtn.style.display = 'block';
+    if (editTeamNameBtn) editTeamNameBtn.style.display = 'inline';
+    if (editTeamInfoBtn) editTeamInfoBtn.style.display = 'inline';
+    console.log('User is team owner');
   } else {
     // Пользователь - обычный участник
-    document.getElementById('owner-actions').style.display = 'none';
-    document.getElementById('member-actions').style.display = 'block';
-    document.getElementById('add-member-btn').style.display = 'none';
-    document.getElementById('edit-team-name-btn').style.display = 'none';
-    document.getElementById('edit-team-info-btn').style.display = 'none';
+    if (ownerActions) ownerActions.style.display = 'none';
+    if (memberActions) memberActions.style.display = 'block';
+    if (addMemberBtn) addMemberBtn.style.display = 'none';
+    if (editTeamNameBtn) editTeamNameBtn.style.display = 'none';
+    if (editTeamInfoBtn) editTeamInfoBtn.style.display = 'none';
+    console.log('User is team member');
   }
   
   // Загружаем историю чата
@@ -125,7 +170,17 @@ function displayTeamInfo() {
 // Отображение участников команды
 function displayTeamMembers() {
   const membersList = document.getElementById('team-members-list');
+  if (!membersList) {
+    console.error('Team members list element not found');
+    return;
+  }
+  
   membersList.innerHTML = '';
+  
+  if (!currentTeam.members || currentTeam.members.length === 0) {
+    console.warn('No team members found');
+    return;
+  }
   
   currentTeam.members.forEach(member => {
     const li = document.createElement('li');
@@ -148,6 +203,8 @@ function displayTeamMembers() {
     
     membersList.appendChild(li);
   });
+  
+  console.log('Team members displayed:', currentTeam.members.length);
 }
 
 // Отображение информации о боссе
@@ -156,7 +213,13 @@ function displayBossInfo() {
   const noBossMessage = document.getElementById('no-boss-message');
   const bossInfo = document.getElementById('boss-info');
   
-  if (!currentTeam.boss || currentTeam.members.length < 2) {
+  if (!bossSection || !noBossMessage || !bossInfo) {
+    console.error('Boss info elements not found');
+    return;
+  }
+  
+  if (!currentTeam.boss || !currentTeam.members || currentTeam.members.length < 2) {
+    console.log('No boss or insufficient team members');
     noBossMessage.style.display = 'block';
     bossInfo.style.display = 'none';
   } else {
@@ -164,36 +227,55 @@ function displayBossInfo() {
     bossInfo.style.display = 'block';
     
     const boss = currentTeam.boss;
-    document.getElementById('boss-name').textContent = boss.name;
-    document.getElementById('boss-level').textContent = `уровень ${boss.level}`;
-    document.getElementById('boss-description').textContent = `"${boss.information}"`;
+    
+    // Название босса
+    const bossName = document.getElementById('boss-name');
+    if (bossName) bossName.textContent = boss.name || 'Неизвестный босс';
+    
+    // Уровень босса
+    const bossLevel = document.getElementById('boss-level');
+    if (bossLevel) bossLevel.textContent = `уровень ${boss.level || '?'}`;
+    
+    // Описание босса
+    const bossDescription = document.getElementById('boss-description');
+    if (bossDescription) bossDescription.textContent = `"${boss.information || 'Нет описания'}"`;
     
     // HP босса
-    const currentHp = currentTeam.boss_lives;
-    const maxHp = boss.base_lives;
+    const currentHp = currentTeam.boss_lives || 0;
+    const maxHp = boss.base_lives || 1;
     const hpPercentage = Math.max(0, (currentHp / maxHp) * 100);
     
-    document.getElementById('boss-hp-text').textContent = `${currentHp}/${maxHp}`;
-    document.getElementById('boss-hp-bar').style.width = `${hpPercentage}%`;
+    const bossHpText = document.getElementById('boss-hp-text');
+    if (bossHpText) bossHpText.textContent = `${currentHp}/${maxHp}`;
+    
+    const bossHpBar = document.getElementById('boss-hp-bar');
+    if (bossHpBar) bossHpBar.style.width = `${hpPercentage}%`;
     
     // Изображение босса
     const bossImage = document.getElementById('boss-image');
-    if (boss.img_url) {
-      bossImage.innerHTML = `<img src="${boss.img_url}" alt="${boss.name}" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
-    } else {
-      bossImage.textContent = 'Изображение монстра';
+    if (bossImage) {
+      if (boss.img_url) {
+        bossImage.innerHTML = `<img src="${boss.img_url}" alt="${boss.name}" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+      } else {
+        bossImage.textContent = 'Изображение монстра';
+      }
     }
+    
+    console.log('Boss info displayed:', boss.name);
   }
 }
 
 // Настройка обработчиков событий
 function setupEventListeners() {
   // Enter в чате
-  document.getElementById('chat-input').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      sendMessage();
-    }
-  });
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) {
+    chatInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+  }
   
   // Закрытие модальных окон при клике вне их
   window.addEventListener('click', function(event) {
@@ -205,10 +287,15 @@ function setupEventListeners() {
 
 // Подключение к чату через WebSocket
 function connectToChat() {
-  if (!currentTeam) return;
+  if (!currentTeam) {
+    console.error('Cannot connect to chat: no current team');
+    return;
+  }
   
   const token = localStorage.getItem('access_token');
   const wsUrl = `${WS_BASE_URL}/ws/team-chat/${currentTeam.team_id}/${token}`;
+  
+  console.log('Connecting to chat WebSocket:', wsUrl);
   
   chatWebSocket = new WebSocket(wsUrl);
   
@@ -237,6 +324,11 @@ function connectToChat() {
 
 // Загрузка истории чата
 async function loadChatHistory() {
+  if (!currentTeam) {
+    console.error('Cannot load chat history: no current team');
+    return;
+  }
+  
   try {
     const token = localStorage.getItem('access_token');
     const response = await fetch(`${window.API_BASE_URL}/teams/${currentTeam.team_id}/chat`, {
@@ -246,12 +338,18 @@ async function loadChatHistory() {
     if (response.ok) {
       const messages = await response.json();
       const chatBox = document.getElementById('chat-messages');
-      chatBox.innerHTML = '';
-      
-      messages.forEach(message => {
-        const messageText = `${message.user.nickname}: ${message.message}`;
-        addMessageToChat(messageText);
-      });
+      if (chatBox) {
+        chatBox.innerHTML = '';
+        
+        messages.forEach(message => {
+          const messageText = `${message.user.nickname}: ${message.message}`;
+          addMessageToChat(messageText);
+        });
+        
+        console.log('Chat history loaded:', messages.length, 'messages');
+      }
+    } else {
+      console.error('Failed to load chat history:', response.status);
     }
   } catch (error) {
     console.error('Error loading chat history:', error);
@@ -261,25 +359,40 @@ async function loadChatHistory() {
 // Добавление сообщения в чат
 function addMessageToChat(message) {
   const chatBox = document.getElementById('chat-messages');
-  const messageElement = document.createElement('div');
-  messageElement.textContent = message;
-  chatBox.appendChild(messageElement);
-  chatBox.scrollTop = chatBox.scrollHeight;
+  if (chatBox) {
+    const messageElement = document.createElement('div');
+    messageElement.textContent = message;
+    messageElement.style.marginBottom = '5px';
+    messageElement.style.padding = '5px';
+    messageElement.style.borderRadius = '4px';
+    messageElement.style.backgroundColor = 'rgba(0,0,0,0.05)';
+    chatBox.appendChild(messageElement);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
 }
 
 // Отправка сообщения в чат
 function sendMessage() {
   const input = document.getElementById('chat-input');
+  if (!input) return;
+  
   const message = input.value.trim();
   
   if (message && chatWebSocket && chatWebSocket.readyState === WebSocket.OPEN) {
     chatWebSocket.send(message);
     input.value = '';
+  } else if (message) {
+    console.error('Cannot send message: WebSocket not connected');
   }
 }
 
 // Атака босса
 async function attackBoss() {
+  if (!currentTeam) {
+    showError('Ошибка: информация о команде не загружена');
+    return;
+  }
+  
   try {
     const token = localStorage.getItem('access_token');
     const response = await fetch(`${window.API_BASE_URL}/teams/${currentTeam.team_id}/attack-boss`, {
@@ -292,14 +405,16 @@ async function attackBoss() {
       
       // Показываем результат атаки
       const attackLog = document.getElementById('attack-log');
-      const logEntry = document.createElement('div');
-      logEntry.textContent = result.message;
-      logEntry.style.marginTop = '10px';
-      logEntry.style.padding = '5px';
-      logEntry.style.backgroundColor = 'rgba(255,255,255,0.1)';
-      logEntry.style.borderRadius = '4px';
-      
-      attackLog.appendChild(logEntry);
+      if (attackLog) {
+        const logEntry = document.createElement('div');
+        logEntry.textContent = result.message;
+        logEntry.style.marginTop = '10px';
+        logEntry.style.padding = '5px';
+        logEntry.style.backgroundColor = 'rgba(255,255,255,0.1)';
+        logEntry.style.borderRadius = '4px';
+        
+        attackLog.appendChild(logEntry);
+      }
       
       // Обновляем информацию о команде
       await loadTeamInfo();
@@ -321,33 +436,58 @@ async function attackBoss() {
 
 // Модальные окна
 function showCreateTeamModal() {
-  document.getElementById('createTeamModal').style.display = 'flex';
-  document.getElementById('create-team-name').focus();
+  const modal = document.getElementById('createTeamModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    const nameInput = document.getElementById('create-team-name');
+    if (nameInput) nameInput.focus();
+  }
 }
 
 function showJoinTeamModal() {
-  document.getElementById('joinTeamModal').style.display = 'flex';
-  document.getElementById('join-team-name').focus();
+  const modal = document.getElementById('joinTeamModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    const nameInput = document.getElementById('join-team-name');
+    if (nameInput) nameInput.focus();
+  }
 }
 
 function showAddMemberModal() {
-  document.getElementById('addMemberModal').style.display = 'flex';
-  document.getElementById('add-member-nickname').focus();
+  const modal = document.getElementById('addMemberModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    const nicknameInput = document.getElementById('add-member-nickname');
+    if (nicknameInput) nicknameInput.focus();
+  }
 }
 
 function showRemoveMemberModal(member) {
   memberToRemove = member;
-  document.getElementById('remove-member-text').textContent = 
-    `Вы уверены, что хотите удалить ${member.nickname} из команды?`;
-  document.getElementById('removeMemberModal').style.display = 'flex';
+  const modal = document.getElementById('removeMemberModal');
+  const text = document.getElementById('remove-member-text');
+  
+  if (text) {
+    text.textContent = `Вы уверены, что хотите удалить ${member.nickname} из команды?`;
+  }
+  
+  if (modal) {
+    modal.style.display = 'flex';
+  }
 }
 
 function showDeleteTeamModal() {
-  document.getElementById('deleteTeamModal').style.display = 'flex';
+  const modal = document.getElementById('deleteTeamModal');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
 }
 
 function closeModal(modalId) {
-  document.getElementById(modalId).style.display = 'none';
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.style.display = 'none';
+  }
   
   // Очищаем поля ввода
   const inputs = document.querySelectorAll(`#${modalId} input, #${modalId} textarea`);
@@ -361,8 +501,16 @@ function closeModal(modalId) {
 
 // Создание команды
 async function createTeam() {
-  const name = document.getElementById('create-team-name').value.trim();
-  const information = document.getElementById('create-team-info').value.trim();
+  const nameInput = document.getElementById('create-team-name');
+  const infoInput = document.getElementById('create-team-info');
+  
+  if (!nameInput) {
+    showError('Элемент ввода названия команды не найден');
+    return;
+  }
+  
+  const name = nameInput.value.trim();
+  const information = infoInput ? infoInput.value.trim() : '';
   
   if (!name) {
     showError('Введите название команды');
@@ -396,7 +544,14 @@ async function createTeam() {
 
 // Присоединение к команде
 async function joinTeam() {
-  const teamName = document.getElementById('join-team-name').value.trim();
+  const nameInput = document.getElementById('join-team-name');
+  
+  if (!nameInput) {
+    showError('Элемент ввода названия команды не найден');
+    return;
+  }
+  
+  const teamName = nameInput.value.trim();
   
   if (!teamName) {
     showError('Введите название команды');
@@ -434,6 +589,11 @@ async function leaveTeam() {
     return;
   }
   
+  if (!currentTeam) {
+    showError('Ошибка: информация о команде не загружена');
+    return;
+  }
+  
   try {
     const token = localStorage.getItem('access_token');
     const response = await fetch(`${window.API_BASE_URL}/teams/${currentTeam.team_id}/leave`, {
@@ -464,6 +624,11 @@ async function leaveTeam() {
 
 // Удаление команды
 async function deleteTeam() {
+  if (!currentTeam) {
+    showError('Ошибка: информация о команде не загружена');
+    return;
+  }
+  
   try {
     const token = localStorage.getItem('access_token');
     const response = await fetch(`${window.API_BASE_URL}/teams/${currentTeam.team_id}`, {
@@ -495,10 +660,22 @@ async function deleteTeam() {
 
 // Добавление участника
 async function addMember() {
-  const nickname = document.getElementById('add-member-nickname').value.trim();
+  const nicknameInput = document.getElementById('add-member-nickname');
+  
+  if (!nicknameInput) {
+    showError('Элемент ввода никнейма не найден');
+    return;
+  }
+  
+  const nickname = nicknameInput.value.trim();
   
   if (!nickname) {
     showError('Введите никнейм участника');
+    return;
+  }
+  
+  if (!currentTeam) {
+    showError('Ошибка: информация о команде не загружена');
     return;
   }
   
@@ -529,7 +706,10 @@ async function addMember() {
 
 // Подтверждение удаления участника
 async function confirmRemoveMember() {
-  if (!memberToRemove) return;
+  if (!memberToRemove || !currentTeam) {
+    showError('Ошибка: данные не загружены');
+    return;
+  }
   
   try {
     const token = localStorage.getItem('access_token');
@@ -558,20 +738,37 @@ async function confirmRemoveMember() {
 
 // Редактирование названия команды
 function editTeamName() {
-  document.getElementById('edit-team-name-input').value = currentTeam.name;
-  document.getElementById('editTeamNameModal').style.display = 'flex';
-  document.getElementById('edit-team-name-input').focus();
+  if (!currentTeam) {
+    showError('Ошибка: информация о команде не загружена');
+    return;
+  }
+  
+  const input = document.getElementById('edit-team-name-input');
+  const modal = document.getElementById('editTeamNameModal');
+  
+  if (input && modal) {
+    input.value = currentTeam.name;
+    modal.style.display = 'flex';
+    input.focus();
+  }
 }
 
 async function saveTeamName() {
-  const newName = document.getElementById('edit-team-name-input').value.trim();
+  const input = document.getElementById('edit-team-name-input');
+  
+  if (!input) {
+    showError('Элемент ввода названия не найден');
+    return;
+  }
+  
+  const newName = input.value.trim();
   
   if (!newName) {
     showError('Введите название команды');
     return;
   }
   
-  if (newName === currentTeam.name) {
+  if (!currentTeam || newName === currentTeam.name) {
     closeModal('editTeamNameModal');
     return;
   }
@@ -603,15 +800,32 @@ async function saveTeamName() {
 
 // Редактирование информации о команде
 function editTeamInfo() {
-  document.getElementById('edit-team-info-input').value = currentTeam.information || '';
-  document.getElementById('editTeamInfoModal').style.display = 'flex';
-  document.getElementById('edit-team-info-input').focus();
+  if (!currentTeam) {
+    showError('Ошибка: информация о команде не загружена');
+    return;
+  }
+  
+  const input = document.getElementById('edit-team-info-input');
+  const modal = document.getElementById('editTeamInfoModal');
+  
+  if (input && modal) {
+    input.value = currentTeam.information || '';
+    modal.style.display = 'flex';
+    input.focus();
+  }
 }
 
 async function saveTeamInfo() {
-  const newInfo = document.getElementById('edit-team-info-input').value.trim();
+  const input = document.getElementById('edit-team-info-input');
   
-  if (newInfo === (currentTeam.information || '')) {
+  if (!input) {
+    showError('Элемент ввода информации не найден');
+    return;
+  }
+  
+  const newInfo = input.value.trim();
+  
+  if (!currentTeam || newInfo === (currentTeam.information || '')) {
     closeModal('editTeamInfoModal');
     return;
   }
@@ -643,10 +857,12 @@ async function saveTeamInfo() {
 
 // Утилиты для показа сообщений
 function showError(message) {
+  console.error('Error:', message);
   alert('Ошибка: ' + message);
 }
 
 function showSuccess(message) {
+  console.log('Success:', message);
   alert(message);
 }
 
