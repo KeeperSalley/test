@@ -8,8 +8,8 @@ BOSSES_DATA = [
     {
         "boss_id": 1,
         "name": "Слабый Гоблин",
-        "base_lives": 150,
-        "level": 5,
+        "base_lives": 1000,
+        "level": 1,
         "gold_reward": 100,
         "information": "Маленький зеленый вредитель из темных пещер.",
         "img_url": "images/boss1.png"
@@ -17,8 +17,8 @@ BOSSES_DATA = [
     {
         "boss_id": 2,
         "name": "Орк-Воин",
-        "base_lives": 400,
-        "level": 15,
+        "base_lives": 2000,
+        "level": 2,
         "gold_reward": 200,
         "information": "Сильный воин орков с большим топором.",
         "img_url": "images/boss2.png"
@@ -26,8 +26,8 @@ BOSSES_DATA = [
     {
         "boss_id": 3,
         "name": "Тролль-Берсерк",
-        "base_lives": 800,
-        "level": 25,
+        "base_lives": 3000,
+        "level": 3,
         "gold_reward": 300,
         "information": "Огромный тролль в состоянии ярости.",
         "img_url": "images/boss3.png"
@@ -35,17 +35,17 @@ BOSSES_DATA = [
     {
         "boss_id": 4,
         "name": "Каменный Голем",
-        "base_lives": 1200,
-        "level": 35,
+        "base_lives": 4000,
+        "level": 4,
         "gold_reward": 400,
         "information": "Древний страж, созданный из магического камня.",
         "img_url": "images/boss4.png"
     },
     {
         "boss_id": 5,
-        "name": "Драконий Детеныш",
-        "base_lives": 1800,
-        "level": 45,
+        "name": "Серебряный дракон",
+        "base_lives": 5000,
+        "level": 5,
         "gold_reward": 500,
         "information": "Молодой дракон с огненным дыханием.",
         "img_url": "images/boss5.png"
@@ -53,8 +53,8 @@ BOSSES_DATA = [
     {
         "boss_id": 6,
         "name": "Демон-Стражник",
-        "base_lives": 2500,
-        "level": 55,
+        "base_lives": 6000,
+        "level": 6,
         "gold_reward": 600,
         "information": "Могущественный демон из преисподней.",
         "img_url": "images/boss6.png"
@@ -62,8 +62,8 @@ BOSSES_DATA = [
     {
         "boss_id": 7,
         "name": "Пожиратель Душ",
-        "base_lives": 3500,
-        "level": 65,
+        "base_lives": 7000,
+        "level": 7,
         "gold_reward": 700,
         "information": "Опасное существо из глубин подземелья.",
         "img_url": "images/boss7.png"
@@ -71,8 +71,8 @@ BOSSES_DATA = [
     {
         "boss_id": 8,
         "name": "Повелитель Тьмы",
-        "base_lives": 5000,
-        "level": 80,
+        "base_lives": 8000,
+        "level": 8,
         "gold_reward": 800,
         "information": "Древний владыка темных сил.",
         "img_url": "images/boss8.png"

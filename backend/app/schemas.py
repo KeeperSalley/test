@@ -22,7 +22,7 @@ class Class(ClassBase):
     class_id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 # --- User Schemas ---
 class UserBase(BaseModel):
@@ -64,8 +64,8 @@ class User(UserBase):
     img: Optional[str] = None
     
     class Config:
-        from_attributes = True
-
+        orm_mode = True
+        
 # Упрощенная схема пользователя для команд
 class UserSimple(BaseModel):
     user_id: int
@@ -95,7 +95,7 @@ class Item(ItemBase):
     class_info: Optional[Class] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
         
 class BuyItemRequest(BaseModel):
     item_id: int
@@ -120,7 +120,7 @@ class UserItem(UserItemBase):
     user: Optional[User] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class UserItemUpdate(BaseModel):
     active: Optional[Literal['true', 'false']] = None
@@ -228,6 +228,7 @@ class BossAttackResult(BaseModel):
     boss_defeated: bool
     rewards_granted: Optional[Dict[str, Any]] = None
 
+
 # --- Catalog Schemas ---
 class CatalogBase(BaseModel):
     user_id: int
@@ -241,7 +242,7 @@ class Catalog(CatalogBase):
     tasks: List['Task'] = []
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 # --- Task Schemas ---
 class TaskBase(BaseModel):
@@ -264,7 +265,7 @@ class DailyTaskSimple(DailyTaskBase):
     daily_task_id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 # Полная схема Task с упрощенными DailyTask
 class Task(TaskBase):
@@ -272,7 +273,7 @@ class Task(TaskBase):
     daily_tasks: List[DailyTaskSimple] = []
 
     class Config:
-        from_attributes = True
+        orm_mode = True
         
 class TaskCreate(TaskBase):
     repeat_days: Optional[List[Literal['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']]] = None
@@ -281,6 +282,7 @@ class TaskUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=127)
     complexity: Optional[Literal['easy', 'normal', 'hard']] = None
     deadline: Optional[date] = None
+    completed: Optional[bool] = None
     completed: Optional[Literal['true', 'false']] = None     
 
 # Упрощенная схема Task для использования в DailyTask
@@ -288,7 +290,7 @@ class TaskSimple(TaskBase):
     task_id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 # Полная схема DailyTask с упрощенной Task
 class DailyTask(DailyTaskBase):
@@ -296,4 +298,4 @@ class DailyTask(DailyTaskBase):
     task: Optional[TaskSimple] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True

@@ -50,7 +50,6 @@ async def get_current_active_user(current_user: models.User = Depends(get_curren
 
 api_router = APIRouter()
 
-# --- Authentication endpoints ---
 @api_router.post("/auth/register", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user_by_nickname = crud.get_user_by_nickname(db, nickname=user.nickname)
@@ -76,7 +75,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-# --- User endpoints ---
 @api_router.get("/users/me", response_model=schemas.User)
 async def read_users_me(current_user: models.User = Depends(get_current_active_user)):
     return current_user
@@ -100,6 +98,30 @@ async def update_user_me(
         raise HTTPException(status_code=404, detail="User not found or update failed")
     return updated_user
 
+@api_router.patch("/users/me", response_model=schemas.User)
+def update_current_user_lives(
+    user_update: schemas.User,
+    current_user: models.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    # Если передано обновление жизней
+    if user_update.lives is not None:
+        # Проверяем, что значение целое число
+        if not isinstance(user_update.lives, int):
+            try:
+                user_update.lives = int(user_update.lives)
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Lives must be an integer value"
+                )
+        
+        # Обновляем значение жизней
+        current_user.lives = user_update.lives
+        print(current_user.lives)
+        
+        return crud.decrease_user_lives(db, current_user.user_id, current_user.lives)
+
 # --- Class endpoints ---
 @api_router.get("/classes/", response_model=List[schemas.Class])
 def get_all_classes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -113,7 +135,8 @@ def get_class_details(class_id: int, db: Session = Depends(get_db)):
     return db_class
 
 # --- Item endpoints ---
-@api_router.get("/items", response_model=List[schemas.Item])
+
+@api_router.get("/items", response_model=List[schemas.Item])  # Убрал завершающий слеш
 def get_all_items_in_shop(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_items(db, skip=skip, limit=limit)
 
@@ -133,14 +156,14 @@ async def buy_item(
     # Получаем предмет из базы данных
     item_to_buy = crud.get_item(db, item_id=buy_request.item_id)
     item_data = {
-        "item_id": item_to_buy.item_id,
-        "name": item_to_buy.name,
-        "price": item_to_buy.price,
-        "information": item_to_buy.information,
-        "type": item_to_buy.type,
-        "class_id": item_to_buy.class_id,
-        "bonus_type": item_to_buy.bonus_type,
-        "bonus_data": item_to_buy.bonus_data
+    "item_id": item_to_buy.item_id,
+    "name": item_to_buy.name,
+    "price": item_to_buy.price,
+    "information": item_to_buy.information,
+    "type": item_to_buy.type,
+    "class_id": item_to_buy.class_id,
+    "bonus_type": item_to_buy.bonus_type,
+    "bonus_data": item_to_buy.bonus_data
     }
     if item_to_buy is None:
         raise HTTPException(
@@ -153,7 +176,7 @@ async def buy_item(
     if existing_user_item:
         return schemas.BuyItemResponse(
             success=True,
-            message=f"You already have {item_to_buy.name}",
+            message=f"Successfully purchased {item_to_buy.name}",
             user_gold=current_user.gold,
             item=item_data
         )
@@ -161,8 +184,8 @@ async def buy_item(
     # Проверяем, достаточно ли у пользователя золота
     if current_user.gold < item_to_buy.price:
         return schemas.BuyItemResponse(
-            success=False,
-            message=f"Not enough gold to buy {item_to_buy.name}",
+            success=True,
+            message=f"Successfully purchased {item_to_buy.name}",
             user_gold=current_user.gold,
             item=item_data
         )
@@ -170,8 +193,8 @@ async def buy_item(
     # Проверяем, соответствует ли предмет классу пользователя (если это классовый предмет)
     if item_to_buy.class_id is not None and item_to_buy.class_id != current_user.class_id:
         return schemas.BuyItemResponse(
-            success=False,
-            message=f"This item is not for your class",
+            success=True,
+            message=f"Successfully purchased {item_to_buy.name}",
             user_gold=current_user.gold,
             item=item_data
         )
@@ -214,6 +237,18 @@ async def buy_item(
 def get_my_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     return crud.get_user_items(db, user_id=current_user.user_id, skip=skip, limit=limit)
 
+@api_router.post("/user-items/buy/{item_id}", response_model=schemas.UserItem)
+def buy_item_from_shop(item_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    item_to_buy = crud.get_item(db, item_id=item_id)
+    if item_to_buy is None:
+        raise HTTPException(status_code=404, detail="Item not found in shop")
+    if current_user.gold < item_to_buy.price:
+        raise HTTPException(status_code=400, detail="Not enough gold")
+    crud.update_user_gold_xp(db, user_id=current_user.user_id, gold_change=-item_to_buy.price)
+    user_item = crud.add_item_to_user_inventory(db, user_id=current_user.user_id, item_id=item_id)
+    db.refresh(current_user)
+    return user_item
+
 @api_router.put("/user-items/{item_id}/toggle-active", response_model=schemas.UserItem)
 def toggle_item_active_status(
     item_id: int, 
@@ -229,12 +264,8 @@ def toggle_item_active_status(
     updated_user_item = crud.update_user_item_active_status(
         db=db, user_id=current_user.user_id, item_id=item_id, active=active_status.active
     )
-    if updated_user_item is None:
-        raise HTTPException(status_code=400, detail="Cannot activate more than 3 items")
     db.refresh(current_user)
     return updated_user_item
-
-# --- Team endpoints ---
 
 @api_router.get("/teams/my-team", response_model=schemas.TeamResponse)
 def get_my_team(
@@ -612,83 +643,6 @@ def delete_task(task_id: int, db: Session = Depends(get_db), current_user: model
     crud.delete_task(db, task_id=task_id)
     return {"detail": "Task deleted successfully"}
 
-@api_router.put("/tasks/{task_id}", response_model=schemas.Task)
-def update_task(
-    task_id: int, 
-    task_update: schemas.TaskUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user)
-):
-    # Verify task belongs to user
-    task = crud.get_task(db, task_id=task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
-    if not catalog or catalog.user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this task")
-    
-    # Handle task completion rewards
-    if task_update.completed == 'true' and task.completed == 'false':
-        rewards = {
-            "easy": [10, 20],
-            "normal": [30, 40],
-            "hard": [50, 80]
-        }
-        crud.update_user_gold_xp(
-            db, 
-            user_id=current_user.user_id,
-            gold_change=rewards[task.complexity][0],
-            points_change=rewards[task.complexity][1]
-        )
-    
-    updated_task = crud.update_task(db, task_id=task_id, task_update=task_update)
-    return updated_task
-
-@api_router.patch("/tasks/{task_id}/completion", response_model=schemas.Task)
-def update_task_completion(
-    task_id: int, 
-    completed_status: schemas.TaskUpdate, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_active_user)
-):
-    # Verify task belongs to user's catalog
-    task = crud.get_task(db, task_id=task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
-    if not catalog or catalog.user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this task")
-    
-    if completed_status.completed is None:
-        raise HTTPException(status_code=400, detail="Completed status must be provided ('true' or 'false')")
-    
-    # Используем обновленную функцию, которая наносит урон боссу
-    updated_task = crud.update_task_completion(
-        db=db, 
-        task_id=task_id, 
-        completed=completed_status.completed, 
-        user_id=current_user.user_id
-    )
-    
-    # Выдаем награды за выполнение задачи
-    if completed_status.completed == 'true':
-        rewards = {
-            "easy": [10, 20],
-            "normal": [30, 40],
-            "hard": [50, 80]
-        }
-        
-        crud.update_user_gold_xp(
-            db,
-            user_id=current_user.user_id,
-            gold_change=rewards[task.complexity][0],
-            points_change=rewards[task.complexity][1]
-        )
-    
-    return updated_task
-
 # --- DailyTask endpoints ---
 @api_router.post("/daily-tasks/", response_model=schemas.DailyTask, status_code=status.HTTP_201_CREATED)
 def create_daily_task(daily_task: schemas.DailyTaskCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -715,6 +669,69 @@ def get_task_daily_tasks(task_id: int, db: Session = Depends(get_db), current_us
         raise HTTPException(status_code=403, detail="Not authorized to view daily tasks for this task")
     
     return crud.get_task_daily_tasks(db, task_id=task_id)
+
+@api_router.put("/tasks/{task_id}", response_model=schemas.Task)
+def update_task(
+    task_id: int, 
+    task_update: schemas.TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Verify task belongs to user
+    task = crud.get_task(db, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
+    if not catalog or catalog.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this task")
+    
+    # Handle task completion rewards
+    if task_update.completed is True and not task.completed:
+
+        crud.update_user_gold_xp(
+            db, 
+            user_id=current_user.user_id,
+            gold_change=experience_reward,
+            points_change=gold_reward
+        )
+    
+    updated_task = crud.update_task(db, task_id=task_id, task_update=task_update)
+    return updated_task
+
+
+@api_router.patch("/tasks/{task_id}/completion", response_model=schemas.Task)
+def update_task_completion(
+    task_id: int, 
+    completed_status: schemas.TaskUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Verify task belongs to user's catalog
+    task = crud.get_task(db, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
+    if not catalog or catalog.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this task")
+    
+    if completed_status.completed is None:
+        raise HTTPException(status_code=400, detail="Completed status must be provided ('true' or 'false')")
+    
+    rewards = {
+        "easy": [10, 20],
+        "normal": [30, 40],
+        "hard": [50, 80]
+    }
+    
+    updated_task = crud.update_task_completion(db=db, task_id=task_id, completed=completed_status.completed, user_id=current_user.user_id)
+    crud.update_user_gold_xp(
+        db,
+        user_id=current_user.user_id,
+        gold_change=rewards[task.complexity][0],
+        points_change=rewards[task.complexity][1])
+    return updated_task
 
 # --- WebSocket для чата ---
 class TeamConnectionManager:

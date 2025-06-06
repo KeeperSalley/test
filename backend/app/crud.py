@@ -1,11 +1,9 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
-from sqlalchemy import func, and_
 from . import models, schemas, security
 import json
-import random
-from typing import Optional, List
+import random # For boss attack simulation
 
 # --- User CRUD --- 
 def get_user(db: Session, user_id: int):
@@ -49,40 +47,90 @@ def update_user_profile(db: Session, user_id: int, user_update: schemas.UserUpda
 
 def update_user_gold_xp(db: Session, user_id: int, gold_change: int = 0, points_change: int = 0):
     db_user = get_user(db, user_id)
+    db_useritems = get_user_items(db, user_id)
+    id_user_items = [id_items.item_id for id_items in db_useritems] 
     if db_user:
-        db_user.gold += gold_change
-        db_user.points += points_change
+        
+        first_exp = points_change
+        first_gold = gold_change
+        experience_reward = points_change
+        gold_reward = gold_change
+        
+        
+        # Классовые мультипликаторы
+        if db_user.class_id == 2:
+            experience_reward = int(experience_reward * 1.1)
+        elif db_user.class_id == 3:
+            gold_reward = int(gold_reward * 1.1)
+        
+        # Мультипликаторы вещей
+        if 5 in id_user_items:
+            experience_reward += int(first_exp * 0.05)
+        if 7 in id_user_items:
+            gold_reward += int(first_gold * 0.05)
+        if 9 in id_user_items:
+            if random.random() < 0.2:
+                experience_reward *= 2
+        if 12 in id_user_items:
+            if random.random() < 0.2:
+                gold_reward *= 2
+        if 14 in id_user_items:
+            experience_reward += int(first_exp * 0.1)
+        
+        
+        db_user.gold += gold_reward
+        db_user.points += experience_reward
+        
+        
+
+        
         
         # Level up if points exceed max_points
         while db_user.points >= db_user.max_points:
             db_user.points -= db_user.max_points
             db_user.level += 1
-            db_user.max_points = 100 * db_user.level
+            db_user.max_points = 100 * db_user.level  # Формула опыта для уровней
+            db_user.attack += 1
             
         db.commit()
         db.refresh(db_user)
     return db_user
 
-def leave_team(db: Session, user_id: int):
-    """Пользователь покидает команду"""
-    db_user = get_user(db, user_id)
-    if db_user and db_user.team_id:
-        team_id = db_user.team_id
-        db_user.team_id = None
+def decrease_user_lives(db: Session, user_id: int, lives: int):
+    user = get_user(db, user_id)
+    db_useritems = get_user_items(db, user_id)
+    id_user_items = [id_items.item_id for id_items in db_useritems]
+    
+    if 10 in id_user_items:
+        if random.random() < 0.2:
+            return user
+    
+    lives = user.lives
+    if 13 in id_user_items:
+        lives += 1
+    
+    level = user.level
+    max_points = user.max_points
+    attack = user.attack
+    points = user.points
+    
+    if lives <= 0:
+        lives = user.max_lives
+        level = user.level - 1 if user.level > 1 else 1
+        max_points = 100 * level
+        attack = user.attack - 1 if user.attack > 1 else user.attack
+        points = 0
         
-        # Проверяем, остались ли участники в команде
-        remaining_members = db.query(models.User).filter(models.User.team_id == team_id).count()
-        
-        # Если команда пустая, удаляем её
-        if remaining_members == 0:
-            delete_team(db, team_id)
-        else:
-            # Проверяем боссов для оставшихся участников
-            update_team_boss(db, team_id)
-        
-        db.commit()
-        db.refresh(db_user)
-    return db_user
+    user.lives = lives
+    user.level = level
+    user.max_points = max_points
+    user.attack = attack
+    user.points = points
+    # Сохраняем изменения
+    db.commit()
+    db.refresh(user)
+
+    return user
 
 # --- Class CRUD ---
 def get_class(db: Session, class_id: int):
@@ -125,6 +173,7 @@ def get_user_items(db: Session, user_id: int, skip: int = 0, limit: int = 100):
     ).filter(models.UserItem.user_id == user_id).offset(skip).limit(limit).all()
 
 def add_item_to_user_inventory(db: Session, user_id: int, item_id: int):
+    # Check if user already has this item
     existing_item = get_user_item(db, user_id, item_id)
     if existing_item:
         return existing_item
@@ -136,25 +185,117 @@ def add_item_to_user_inventory(db: Session, user_id: int, item_id: int):
     return db_user_item
 
 def get_active_items_count(db: Session, user_id: int):
+    """Получить количество активных предметов у пользователя"""
     return db.query(models.UserItem).filter(
         models.UserItem.user_id == user_id,
         models.UserItem.active == 'true'
     ).count()
 
+
 def update_user_item_active_status(db: Session, user_id: int, item_id: int, active: str):
     db_user_item = get_user_item(db, user_id, item_id)
+    db_user = get_user(db, user_id)
     if not db_user_item:
         return None
 
+    # Если активируем предмет, проверяем количество уже активных предметов
     if active == 'true':
+        if item_id in (1, 2, 3, 4):
+            if item_id == 1:
+                max_lives = db_user.max_lives
+                current_lives = db_user.lives
+                
+                current_lives = current_lives + round(max_lives * 0.25)
+                current_lives = current_lives if current_lives <= max_lives else max_lives
+                db_user.lives = current_lives
+                db.commit()
+                db.refresh(db_user)
+                remove_user_item(db, user_id, item_id)
+                return None
+            elif item_id == 2:
+                max_lives = db_user.max_lives
+                db_user.lives = max_lives
+                db.commit()
+                db.refresh(db_user)
+                remove_user_item(db, user_id, item_id)
+                return None
+            elif item_id == 3:
+                max_points = db_user.max_points
+                current_points = db_user.points
+                
+                current_points = current_points + round(max_points * 0.25)
+                if current_points >= max_points:
+                    current_points = 0
+                    db_user.level += 1
+                    db_user.max_points = 100 * db_user.level  # Формула опыта для уровней
+                    db_user.attack += 1
+                db_user.points = current_points
+                db.commit()
+                db.refresh(db_user)
+                remove_user_item(db, user_id, item_id)
+                return None
+            elif item_id == 4:
+                db_user.points = 0
+                db_user.level += 1
+                db_user.max_points = 100 * db_user.level  # Формула опыта для уровней
+                db_user.attack += 1
+                db.commit()
+                db.refresh(db_user)
+                remove_user_item(db, user_id, item_id)
+                return None
+        
+        # Получаем количество активных предметов
         active_count = get_active_items_count(db, user_id)
+        
+        # Если уже 3 активных предмета, не позволяем активировать еще один
         if active_count >= 3:
             return None
-    
+        
+        if item_id == 6:
+            db_user.lives += 3
+            db_user.max_lives += 3
+            db.commit()
+            db.refresh(db_user)
+        if item_id == 8:
+            db_user.attack += 5
+            db.commit()
+            db.refresh(db_user)
+        if item_id == 11:
+            db_user.attack += 10
+            db.commit()
+            db.refresh(db_user)
+        if item_id == 16:
+            db_user.attack += 20
+            db.commit()
+            db.refresh(db_user)    
+            
+            
+    if active == 'false':
+        if item_id == 6:
+            db_user.lives -= 3
+            db_user.max_lives -= 3
+            db.commit()
+            db.refresh(db_user)
+        if item_id == 8:
+            db_user.attack -= 5
+            db.commit()
+            db.refresh(db_user)
+        if item_id == 11:
+            db_user.attack -= 10
+            db.commit()
+            db.refresh(db_user)
+        if item_id == 16:
+            db_user.attack -= 20
+            db.commit()
+            db.refresh(db_user)
+            
+    # Устанавливаем статус активности
     db_user_item.active = active
+    
     db.commit()
     db.refresh(db_user_item)
     return db_user_item
+
 
 def remove_user_item(db: Session, user_id: int, item_id: int):
     db_user_item = get_user_item(db, user_id, item_id)
@@ -163,6 +304,7 @@ def remove_user_item(db: Session, user_id: int, item_id: int):
         db.commit()
     return db_user_item
 
+# --- Team CRUD ---
 # --- Team CRUD ---
 def get_team(db: Session, team_id: int):
     try:
@@ -374,9 +516,20 @@ def defeat_boss(db: Session, team_id: int):
     # Выдаем награду всем участникам команды
     members = db.query(models.User).filter(models.User.team_id == team_id).all()
     for member in members:
+        db_useritems = get_user_items(db, member.user_id)
+        id_user_items = [id_items.item_id for id_items in db_useritems]
+        
+        if 15 in id_user_items:
+            reward = boss.gold_reward * 2
+            update_user_gold_xp(db, member.user_id, gold_change=reward)
+        
         update_user_gold_xp(db, member.user_id, gold_change=boss.gold_reward)
     
-    # Обновляем босса команды (появляется новый)
+    team.boss_id = None
+    team.boss_lives = 0
+    db.commit()
+    
+    # Назначаем нового босса
     update_team_boss(db, team_id)
     
     return {"boss_defeated": True, "gold_reward": boss.gold_reward, "members_count": len(members)}
@@ -406,7 +559,9 @@ def delete_team_chat_messages(db: Session, team_id: int):
     """Удалить все сообщения чата команды"""
     db.query(models.ChatMessage).filter(models.ChatMessage.team_id == team_id).delete()
     db.commit()
-
+    
+    
+    
 # --- Catalog CRUD ---
 def get_catalog(db: Session, catalog_id: int):
     return db.query(models.Catalog).filter(models.Catalog.catalog_id == catalog_id).first()
@@ -436,7 +591,8 @@ def get_catalog_tasks(db: Session, catalog_id: int, skip: int = 0, limit: int = 
     return db.query(models.Task).filter(models.Task.catalog_id == catalog_id).offset(skip).limit(limit).all()
 
 def create_task(db: Session, task: schemas.TaskCreate):
-    task_data = task.dict(exclude={"repeat_days"})
+    # Исключаем поля experience_reward и gold_reward, которых нет в модели Task
+    task_data = task.dict(exclude={"experience_reward", "gold_reward", "repeat_days"})
     db_task = models.Task(**task_data)
     db.add(db_task)
     db.commit()
@@ -457,12 +613,10 @@ def update_task(db: Session, task_id: int, task_update: schemas.TaskUpdate):
     return db_task
 
 def update_task_completion(db: Session, task_id: int, completed: str, user_id: int):
-    """Обновить статус выполнения задачи и нанести урон боссу"""
     db_task = get_task(db, task_id=task_id)
     if not db_task:
         return None
     
-    # Получаем пользователя
     user = get_user(db, user_id)
     if not user:
         return None
@@ -471,11 +625,11 @@ def update_task_completion(db: Session, task_id: int, completed: str, user_id: i
     if completed == 'true' and user.team_id:
         team = get_team(db, user.team_id)
         if team and team.boss_id and team.boss_lives > 0:
-            # Урон зависит от атаки пользователя и сложности задачи
-            complexity_multiplier = {'easy': 1, 'normal': 1.5, 'hard': 2}
-            damage = int(user.attack * complexity_multiplier.get(db_task.complexity, 1))
+            damage = int(user.attack)
+            if user.class_id == 1:
+                boss = get_boss(db, team.boss_id)
+                damage = damage + boss.level
             
-            # Наносим урон боссу
             new_lives = max(0, team.boss_lives - damage)
             team.boss_lives = new_lives
             
@@ -488,9 +642,11 @@ def update_task_completion(db: Session, task_id: int, completed: str, user_id: i
     db.refresh(db_task)
     return db_task
 
+
 def delete_task(db: Session, task_id: int):
     db_task = get_task(db, task_id)
     if db_task:
+        # First delete any associated daily tasks
         db.query(models.DailyTask).filter(models.DailyTask.task_id == task_id).delete()
         db.delete(db_task)
         db.commit()

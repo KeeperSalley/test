@@ -9,134 +9,193 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy.orm import Session
 from app import models, database
 
-# Данные предметов
+# type
+# once
+# com
+# rare
+# class
+
+
+# bonus_type
+
+# health_restore проценты
+# health_restore_full фул хп
+# exp_boost проценты от оптыа
+# exp_multiplier проценты
+# max_health число
+# gold_multiplier процентты
+# attack целое
+# double_points проценты
+# protecting_lives  - единица урона при провале
+# chains_protecting
+# double_gold_bosses - удвоенный бонус голды с боссов
+
 ITEMS_DATA = [
-    # Разовые предметы (com)
+    # Разовые предметы (once)
     {
-        "item_id": 1,
+        "item_id": 1, # +
         "name": "Лепестки исцеления",
-        "price": 100,
+        "price": 1000,
         "type": "com",
         "class_id": None,
         "bonus_type": "health_restore",
         "bonus_data": 25,
-        "information": "Восстанавливает 25% здоровья."
+        "information": " Цветы, что растут на вершинах высоких гор."
     },
     {
-        "item_id": 2,
+        "item_id": 2, # +
         "name": "Восстанавливающий отвар",
-        "price": 120,
+        "price": 4000,
         "type": "com",
         "class_id": None,
         "bonus_type": "health_restore_full",
         "bonus_data": 100,
-        "information": "Полностью восстанавливает здоровье."
+        "information": " Пылающая жидкость, умело приготовленная болотной ведьмой."
     },
     {
-        "item_id": 3,
+        "item_id": 3, # +
         "name": "Свиток древнего разума",
-        "price": 150,
+        "price": 1000,
         "type": "com",
         "class_id": None,
         "bonus_type": "exp_boost",
         "bonus_data": 25,
-        "information": "Дает 25% опыта до следующего уровня."
+        "information": " Читая его, вы чувствуете, как наполняетесь решимостью."
     },
     {
-        "item_id": 4,
+        "item_id": 4, # +
         "name": "Зелье просветления",
-        "price": 200,
+        "price": 4000,
         "type": "com",
         "class_id": None,
         "bonus_type": "exp_boost",
         "bonus_data": 100,
-        "information": "Дает столько опыта, сколько не хватает до следующего уровня."
+        "information": " После него мир начинает казаться совершенно другим."
     },
     
-    # Редкие предметы (rare)
+    # Обычные предметы (com)
     {
-        "item_id": 5,
+        "item_id": 5, # +
         "name": "Таинственная шкатулка",
-        "price": 500,
+        "price": 2000,
         "type": "rare",
         "class_id": None,
         "bonus_type": "exp_multiplier",
         "bonus_data": 5,
-        "information": "Реликвия, изготовленная опытным мастером. +5% к получаемому опыту."
+        "information": "Реликвия, изготовленная опытным мастером. "
     },
     {
-        "item_id": 6,
+        "item_id": 6, # +
         "name": "Драконий браслет",
-        "price": 600,
+        "price": 2000,
         "type": "rare",
         "class_id": None,
         "bonus_type": "max_health",
         "bonus_data": 3,
-        "information": "Увеличивает максимальное здоровье на 3 единицы."
+        "information": " Переливающиеся чешуйки придают сил."
     },
     {
-        "item_id": 7,
+        "item_id": 7, # +
         "name": "Сумка торговца",
-        "price": 800,
+        "price": 2000,
         "type": "rare",
         "class_id": None,
         "bonus_type": "gold_multiplier",
         "bonus_data": 5,
-        "information": "Увеличивает получаемое золото за задачи на 5%."
+        "information": " Небольшая, но чрезвычайно вместительная."
     },
     {
-        "item_id": 8,
+        "item_id": 8, # +
         "name": "Талисман скрытой силы",
-        "price": 1000,
+        "price": 2000,
         "type": "rare",
         "class_id": None,
         "bonus_type": "attack",
         "bonus_data": 5,
-        "information": "Увеличивает атаку на 5 единиц."
+        "information": " Кажется, это техника бесконтактного боя."
     },
-    
-    # Классовые предметы
     {
-        "item_id": 9,
-        "name": "Амулет архимага",
-        "price": 1500,
+        "item_id": 9, # +
+        "name": "Клыкастый перстень",
+        "price": 7000,
         "type": "rare",
         "class_id": 1,  # Воин
-        "bonus_type": "attack",
-        "bonus_data": 10,
-        "information": "Увеличивает атаку на 10 единиц."
+        "bonus_type": "double_points",
+        "bonus_data": 20,
+        "information": " Унаследован от первых вождей далёкого прошлого."
     },
     {
-        "item_id": 10,
-        "name": "Клинок жертвоприношений",
-        "price": 1500,
+        "item_id": 10, # +
+        "name": "Щит спокойствия",
+        "price": 7000,
+        "type": "rare",
+        "class_id": 1,  # Воин
+        "bonus_type": "chains_protecting",
+        "bonus_data": 10,
+        "information": "То, что казалось обладателю провалом, было лишь сном."
+    },
+    {
+        "item_id": 11, # +
+        "name": "Амулет архимага",
+        "price": 7000,
         "type": "rare",
         "class_id": 2,  # Маг
         "bonus_type": "attack",
-        "bonus_data": 20,
-        "information": "Увеличивает атаку на 20 единиц."
+        "bonus_data": 10,
+        "information": " Ярко мерцает, ослепляя врагов."
     },
     {
-        "item_id": 11,
+        "item_id": 12, # +
+        "name": "Лазуритовый свиток",
+        "price": 7000,
+        "type": "rare",
+        "class_id": 2,  # Маг
+        "bonus_type": "double_gold",
+        "bonus_data": 20,
+        "information": " Колдовать золото – непростое заклинание. И очень полезное."
+    },
+    {
+        "item_id": 13, # +
         "name": "Лира благосклонности",
-        "price": 1600,
+        "price": 7000,
         "type": "rare",
         "class_id": 3,  # Бард
-        "bonus_type": "health_regen",
-        "bonus_data": 3,
-        "information": "Ежедневно восстанавливает 3 здоровья."
+        "bonus_type": "protecting_lives",
+        "bonus_data": 1,
+        "information": "Одной песней приносит умиротворение."
     },
     {
-        "item_id": 12,
-        "name": "Мантия благосклонности",
-        "price": 2000,
+        "item_id": 14, # +
+        "name": " Венок просветления ",
+        "price": 7000,
+        "type": "rare",
+        "class_id": 3,  # Бард
+        "bonus_type": "exp_multiplier",
+        "bonus_data": 10,
+        "information": "Плетён из вечнозелёных ветвей, что не вянут даже в холоде."
+    },
+    {
+        "item_id": 15,
+        "name": "Мантия благосостояния",
+        "price": 7000,
         "type": "rare",
         "class_id": 4,  # Жрец
-        "bonus_type": "boss_gold",
-        "bonus_data": 2,
-        "information": "Удваивает золото за босса."
+        "bonus_type": "double_gold_bosses",
+        "bonus_data": 1,
+        "information": "Покоем покрывает душу."
+    },
+    {
+        "item_id": 16, # +
+        "name": "Клинок жертвоприношений",
+        "price": 7000,
+        "type": "rare",
+        "class_id": 4,  # Жрец
+        "bonus_type": "attack",
+        "bonus_data": 20,
+        "information": " Ритуальная реликвия, покрытая необычными символами»"
     }
 ]
+
 
 def init_items():
     """Инициализация предметов в базе данных"""
