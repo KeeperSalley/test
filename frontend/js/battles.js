@@ -224,3 +224,32 @@ function clearMessage(elementId) {
   element.textContent = '';
   element.className = 'modal-message';
 }
+
+async function checkUserTeamStatus() {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      window.location.href = 'auth.html';
+      return;
+    }
+
+    const response = await fetch(`${window.API_BASE_URL}/teams/my-team`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+
+    if (response.ok) {
+      // ИСПРАВЛЕНИЕ: Автоматический редирект если пользователь уже в команде
+      console.log('User is already in a team, redirecting to team.html');
+      window.location.href = 'team.html';
+      return;
+    } else if (response.status === 404) {
+      // Пользователь не в команде - показываем интерфейс battles.html
+      const teamNavSection = document.querySelector('.team-nav-section');
+      if (teamNavSection) {
+        teamNavSection.style.display = 'none';
+      }
+    }
+  } catch (error) {
+    console.error('Error checking team status:', error);
+  }
+}

@@ -122,6 +122,8 @@
             // If /images is mounted at root, then "images/classname.svg" is correct.
             const photoUrl = `${photoBase}${genderSuffix()}.svg`;
 
+            
+
             const token = localStorage.getItem("access_token");
             if (!token) {
                 messageElement.textContent = "Ошибка: Вы не авторизованы. Пожалуйста, войдите.";

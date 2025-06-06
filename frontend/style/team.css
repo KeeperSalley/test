@@ -309,9 +309,10 @@ p {
 .chat-container {
   background-color: #B8CACD;
   padding: 20px;
-  width: 360px;
+  width: 400px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
+  margin-left: 40px;
 }
 
 .chat-title {
@@ -494,8 +495,31 @@ p {
 .team-page-btn:hover {
   background-color: #2a4c44;
 }
+.blocks-container {
+  display: grid;
+  grid-template-columns: 1fr 320px 360px;
+  gap: 25px;
+  align-items: flex-start;
+}
 
-/* Адаптивность */
+.team-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+@media (max-width: 1200px) {
+  .blocks-container {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  
+  .team-info-section {
+    width: 100%;
+    max-width: 500px;
+  }
+}
+
 @media (max-width: 1024px) {
   .main-content {
     margin-left: 50px;

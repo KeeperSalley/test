@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Получаем токен из localStorage
     const token = localStorage.getItem('access_token');
     if (!token) {
-      window.location.href = 'login.html';
+      window.location.href = 'auth.html';
       return;
     }
     
@@ -413,10 +413,6 @@ async function useSelectedItem() {
         active: 'true'
       })
     });
-    
-    if (!response.ok) {
-      throw new Error('Failed to activate item');
-    }
     
     // Обновляем список предметов пользователя
     await fetchUserItems(token);

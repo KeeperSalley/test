@@ -117,7 +117,7 @@ function displayTeamInfo() {
   
   if (noTeamMessage && teamContent) {
     noTeamMessage.style.display = 'none';
-    teamContent.style.display = 'block';
+    teamContent.style.display = 'grid';
   }
   
   // Название команды
@@ -383,54 +383,6 @@ function sendMessage() {
     input.value = '';
   } else if (message) {
     console.error('Cannot send message: WebSocket not connected');
-  }
-}
-
-// Атака босса
-async function attackBoss() {
-  if (!currentTeam) {
-    showError('Ошибка: информация о команде не загружена');
-    return;
-  }
-  
-  try {
-    const token = localStorage.getItem('access_token');
-    const response = await fetch(`${window.API_BASE_URL}/teams/${currentTeam.team_id}/attack-boss`, {
-      method: 'POST',
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      const result = await response.json();
-      
-      // Показываем результат атаки
-      const attackLog = document.getElementById('attack-log');
-      if (attackLog) {
-        const logEntry = document.createElement('div');
-        logEntry.textContent = result.message;
-        logEntry.style.marginTop = '10px';
-        logEntry.style.padding = '5px';
-        logEntry.style.backgroundColor = 'rgba(255,255,255,0.1)';
-        logEntry.style.borderRadius = '4px';
-        
-        attackLog.appendChild(logEntry);
-      }
-      
-      // Обновляем информацию о команде
-      await loadTeamInfo();
-      
-      // Если босс побежден, показываем награду
-      if (result.boss_defeated && result.rewards_granted) {
-        showSuccess(`Босс побежден! Все участники команды получили ${result.rewards_granted.gold} золота!`);
-      }
-      
-    } else {
-      const error = await response.json();
-      showError(error.detail || 'Ошибка атаки босса');
-    }
-  } catch (error) {
-    console.error('Error attacking boss:', error);
-    showError('Ошибка при атаке босса');
   }
 }
 

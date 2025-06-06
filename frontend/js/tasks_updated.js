@@ -11,6 +11,9 @@ let tasks = [];
 let catalogs = [];
 let currentEditingTaskId = null;
 let currentCatalogId = null;
+// Хранилище для отслеживания задач, за которые уже был нанесен урон
+let damagedTaskIds = new Set();
+
 
 // Fetch user's catalogs from API
 async function fetchCatalogs() {
@@ -84,6 +87,9 @@ async function fetchCatalogTasks(catalogId) {
       tasks = tasks.filter(t => t.catalog_id !== catalogId);
       tasks = [...tasks, ...catalogTasks];
       renderTasks();
+      // Проверяем просроченные выполненные задачи после загрузки всех задач
+      checkOverdueCompletedTasks();
+
     }
   } catch (error) {
     console.error(`Error fetching tasks for catalog ${catalogId}:`, error);
@@ -98,6 +104,112 @@ async function fetchAllTasks() {
   }
 }
 
+// Функция для проверки просроченных выполненных задач и нанесения урона
+async function checkOverdueCompletedTasks() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Собираем просроченные выполненные задачи
+  const overdueTasks = tasks.filter(task => {
+    // Проверяем, что задача выполнена
+    if (task.completed !== 'false') return false;
+    
+    // Проверяем, что у задачи есть дедлайн
+    if (!task.deadline) return false;
+    
+    // Проверяем, что дедлайн прошел
+    const deadlineDate = new Date(task.deadline);
+    deadlineDate.setHours(0, 0, 0, 0);
+    
+    // Проверяем, что за эту задачу еще не был нанесен урон
+    return deadlineDate < today && !damagedTaskIds.has(task.task_id);
+  });
+  
+  // Если есть просроченные выполненные задачи, наносим урон
+  if (overdueTasks.length > 0) {
+    for (const task of overdueTasks) {
+      await applyDamageForTask(task);
+    }
+    
+    // Обновляем список задач после нанесения урона и удаления
+    renderTasks();
+  }
+}
+
+// Функция для нанесения урона за задачу и её удаления
+async function applyDamageForTask(task) {
+  try {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    
+    // Определяем урон в зависимости от сложности задачи
+    let damage = 4; // По умолчанию для 'normal'
+    if (task.complexity === 'easy') {
+      damage = 3;
+    } else if (task.complexity === 'hard') {
+      damage = 5;
+    }
+    
+    // Сначала получаем текущее количество жизней пользователя
+    const userResponse = await fetch(`${window.API_BASE_URL}/users/me`, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    
+    if (!userResponse.ok) {
+      console.error(`Failed to get user info: ${userResponse.status}`);
+      return;
+    }
+    
+    const userData = await userResponse.json();
+    
+    // Проверяем, что у пользователя есть поле lives
+    if (userData.lives === undefined) {
+      console.error("User data doesn't contain lives field");
+      return;
+    }
+    
+    if (userData.class_id === 4) {
+      damage = damage - 1;
+    }
+
+    // Вычисляем новое значение жизней (целое число)
+    const currentLives = parseInt(userData.lives);
+    const newLives = Math.max(0, currentLives - damage); // Не даем уйти в отрицательные значения
+    
+    // Вызываем API для обновления жизней пользователя
+    const updateResponse = await fetch(`${window.API_BASE_URL}/users/me`, {
+      method: "PATCH",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        login: userData.login,
+        nickname: userData.nickname,
+        user_id: userData.user_id,
+        lives: newLives // Отправляем новое целочисленное значение
+      })
+    });
+    
+    if (updateResponse.ok) {
+      console.log(`Damage applied for task ${task.task_id}: ${damage} lives. Lives reduced from ${currentLives} to ${newLives}`);
+      
+      // Добавляем задачу в список тех, за которые уже нанесен урон
+      damagedTaskIds.add(task.task_id);
+      
+      // Удаляем задачу
+      await deleteTask(task.task_id);
+    } else {
+      console.error(`Failed to apply damage for task ${task.task_id}:`, updateResponse.status);
+    }
+  } catch (error) {
+    console.error(`Error applying damage for task ${task.task_id}:`, error);
+  }
+}
+
+
 // Render catalogs in the UI
 function renderCatalogs() {
   const container = document.getElementById('catalogs-container');
@@ -105,6 +217,25 @@ function renderCatalogs() {
   
   // Clear container
   container.innerHTML = '';
+  // Add "Мой день" catalog first
+  const myDayCatalog = document.createElement('div');
+  myDayCatalog.className = 'catalog';
+  myDayCatalog.id = 'my-day-catalog';
+
+  myDayCatalog.innerHTML = `
+    <div class="catalog-header">
+      <h2 class="catalog-title">Мой день</h2>
+      <div class="catalog-actions">
+        <!-- Кнопка добавления задачи не нужна для "Мой день", так как это виртуальный каталог -->
+      </div>
+    </div>
+    <div class="catalog-content">
+      <ul class="tasks-list" id="tasks-my-day"></ul>
+    </div>
+  `;
+
+  container.appendChild(myDayCatalog);
+
   
   // Add each catalog
   catalogs.forEach(catalog => {
@@ -151,6 +282,7 @@ function renderCatalogs() {
 function renderTasks() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayStr = today.toLocaleDateString('ru-RU');
   
   // Clear all task lists
   document.querySelectorAll('.tasks-list').forEach(list => {
@@ -168,6 +300,7 @@ function renderTasks() {
   
   // Group tasks by catalog and date
   const catalogTasks = {};
+  const todayTasks = [];
   
   // Process all tasks
   tasks.forEach(task => {
@@ -180,23 +313,39 @@ function renderTasks() {
     }
     
     // Group by date for catalog display
+    let isForToday = false;
+
     if (task.deadline) {
       const deadlineDate = new Date(task.deadline);
       deadlineDate.setHours(0, 0, 0, 0);
       const dateStr = deadlineDate.toLocaleDateString('ru-RU');
       
-      if (!catalogTasks[task.catalog_id].withDate[dateStr]) {
-        catalogTasks[task.catalog_id].withDate[dateStr] = [];
+      // Check if task is for today
+      if (dateStr === todayStr) {
+        isForToday = true;
+        todayTasks.push(task);
+      } else {
+        // Group by date for catalog display (only if not today)
+        if (!catalogTasks[task.catalog_id].withDate[dateStr]) {
+          catalogTasks[task.catalog_id].withDate[dateStr] = [];
+        }
+        
+        catalogTasks[task.catalog_id].withDate[dateStr].push(task);
       }
-      
-      catalogTasks[task.catalog_id].withDate[dateStr].push(task);
     } else {
+      // Tasks without date go to their original catalogs
       catalogTasks[task.catalog_id].withoutDate.push(task);
     }
-    
-    // Add task to calendar if it has a deadline
-    if (task.deadline) {
-      addTaskToCalendar(task, calendarTasks, today);
+
+    if (task.daily_tasks && task.daily_tasks.length > 0) {
+      const nextDate = getNextRepeatDate(task.daily_tasks, today);
+      if (nextDate && nextDate.toLocaleDateString('ru-RU') === todayStr) {
+        isForToday = true;
+        // Add to today's tasks if not already there
+        if (!todayTasks.some(t => t.task_id === task.task_id)) {
+          todayTasks.push(task);
+        }
+      }
     }
     
     // Add task to calendar if it has daily repetitions
@@ -204,6 +353,29 @@ function renderTasks() {
       addTaskToCalendar(task, calendarTasks, today);
     }
   });
+
+  // Render today's tasks in "Мой день"
+  const myDayTasksList = document.getElementById('tasks-my-day');
+  if (myDayTasksList) {
+    if (todayTasks.length > 0) {
+      // Create task group container
+      const taskGroup = document.createElement('div');
+      taskGroup.className = 'task-group';
+      myDayTasksList.appendChild(taskGroup);
+      
+      // Add today's tasks
+      todayTasks.forEach(task => {
+        addTaskToGroup(task, taskGroup);
+      });
+    } else {
+      // Show message if no tasks for today
+      const noTasksMsg = document.createElement('div');
+      noTasksMsg.className = 'no-tasks-message';
+      noTasksMsg.textContent = 'Нет задач на сегодня';
+      myDayTasksList.appendChild(noTasksMsg);
+    }
+}
+
   
   // Render tasks in catalogs
   for (const catalogId in catalogTasks) {
@@ -487,6 +659,23 @@ async function updateTaskCompletion(taskId, completed) {
     // as it's not part of the task schema. This would need to be implemented
     // in a real application.
     console.log(`Task ${taskId} completion status: ${completed}`);
+    if (completed) {
+      const task = tasks.find(t => t.task_id === taskId);
+      if (task && task.deadline) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const deadlineDate = new Date(task.deadline);
+        deadlineDate.setHours(0, 0, 0, 0);
+        
+        // Если дедлайн прошел и за эту задачу еще не был нанесен урон
+        if (deadlineDate < today && !damagedTaskIds.has(taskId)) {
+          await applyDamageForTask(task);
+          // Обновляем список задач после нанесения урона и удаления
+          tasks = tasks.filter(t => t.task_id !== taskId);
+          renderTasks();
+        }
+      }
+    }
   } catch (error) {
     console.error(`Error updating task ${taskId} completion:`, error);
   }
@@ -638,7 +827,7 @@ async function saveTask() {
 }
 
 // Delete task
-async function deleteTask() {
+async function deleteTask(currentEditingTaskId) {
   if (!currentEditingTaskId) return;
   
   try {
