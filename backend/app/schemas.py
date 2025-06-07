@@ -22,7 +22,7 @@ class Class(ClassBase):
     class_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- User Schemas ---
 class UserBase(BaseModel):
@@ -64,7 +64,7 @@ class User(UserBase):
     img: Optional[str] = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True
         
 # Упрощенная схема пользователя для команд
 class UserSimple(BaseModel):
@@ -95,7 +95,7 @@ class Item(ItemBase):
     class_info: Optional[Class] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         
 class BuyItemRequest(BaseModel):
     item_id: int
@@ -120,7 +120,7 @@ class UserItem(UserItemBase):
     user: Optional[User] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserItemUpdate(BaseModel):
     active: Optional[Literal['true', 'false']] = None
@@ -182,16 +182,6 @@ class TeamResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# Функция для получения участников команды
-def get_team_with_members(team_obj, db_session):
-    """Вспомогательная функция для добавления участников в команду"""
-    from . import crud
-    members = crud.get_team_members(db_session, team_obj.team_id)
-    return {
-        **team_obj.__dict__,
-        "members": [UserSimple.from_orm(member) for member in members]
-    }
-
 # --- Chat Message Schemas ---
 class ChatMessageBase(BaseModel):
     message: str = Field(..., max_length=1000)
@@ -228,7 +218,6 @@ class BossAttackResult(BaseModel):
     boss_defeated: bool
     rewards_granted: Optional[Dict[str, Any]] = None
 
-
 # --- Catalog Schemas ---
 class CatalogBase(BaseModel):
     user_id: int
@@ -242,7 +231,7 @@ class Catalog(CatalogBase):
     tasks: List['Task'] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # --- Task Schemas ---
 class TaskBase(BaseModel):
@@ -265,18 +254,27 @@ class DailyTaskSimple(DailyTaskBase):
     daily_task_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
-# Полная схема Task с упрощенными DailyTask
-class Task(TaskBase):
+# Расширенная схема Task с новыми полями для ежедневных задач
+class TaskExtended(TaskBase):
+    # Новые поля для поддержки ежедневных задач
+    parent_task_id: Optional[int] = None
+    is_daily_instance: bool = False
+    created_at: Optional[datetime] = None
+
+class Task(TaskExtended):
     task_id: int
     daily_tasks: List[DailyTaskSimple] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         
 class TaskCreate(TaskBase):
     repeat_days: Optional[List[Literal['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']]] = None
+    # Новые поля для создания экземпляров ежедневных задач
+    parent_task_id: Optional[int] = None
+    is_daily_instance: Optional[bool] = False
     
 class TaskUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=127)
@@ -290,7 +288,7 @@ class TaskSimple(TaskBase):
     task_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Полная схема DailyTask с упрощенной Task
 class DailyTask(DailyTaskBase):
@@ -298,4 +296,14 @@ class DailyTask(DailyTaskBase):
     task: Optional[TaskSimple] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+# Схема для создания экземпляра ежедневной задачи
+class DailyTaskInstanceCreate(BaseModel):
+    original_task_id: int
+    target_date: date
+
+class DailyTaskInstanceResponse(BaseModel):
+    success: bool
+    message: str
+    task: Optional[Task] = None

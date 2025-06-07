@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Enum, DateTime, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Enum, DateTime, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
@@ -95,8 +95,8 @@ class Boss(Base):
     base_lives = Column(Integer, nullable=False)
     information = Column(String, nullable=True)
     level = Column(Integer, default=1)
-    gold_reward = Column(Integer, default=100)  # Добавлено поле для награды
-    img_url = Column(String(255), nullable=True)  # Добавлено поле для изображения
+    gold_reward = Column(Integer, default=100)
+    img_url = Column(String(255), nullable=True)
 
     # Relationships
     teams = relationship("Team", back_populates="boss")
@@ -122,9 +122,18 @@ class Task(Base):
     deadline = Column(Date, nullable=True)
     completed = Column(Enum('true', 'false', name='completed_status'), default='false', nullable=False)
     
+    # Новые поля для поддержки ежедневных задач
+    parent_task_id = Column(Integer, ForeignKey("tasks.task_id"), nullable=True)  # Ссылка на родительскую задачу
+    is_daily_instance = Column(Boolean, default=False)  # Флаг, что это экземпляр ежедневной задачи
+    created_at = Column(DateTime, default=datetime.utcnow)  # Время создания экземпляра
+    
     # Relationships
     catalog = relationship("Catalog", back_populates="tasks")
-    daily_tasks = relationship("DailyTask", back_populates="task")
+    daily_tasks = relationship("DailyTask", back_populates="task", cascade="all, delete-orphan")
+    
+    # Отношения для родительских/дочерних задач
+    parent_task = relationship("Task", remote_side=[task_id], back_populates="child_instances")
+    child_instances = relationship("Task", back_populates="parent_task", cascade="all, delete-orphan")
 
 class DailyTask(Base):
     __tablename__ = "daily_task"

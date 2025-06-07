@@ -136,7 +136,7 @@ def get_class_details(class_id: int, db: Session = Depends(get_db)):
 
 # --- Item endpoints ---
 
-@api_router.get("/items", response_model=List[schemas.Item])  # Убрал завершающий слеш
+@api_router.get("/items", response_model=List[schemas.Item])
 def get_all_items_in_shop(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_items(db, skip=skip, limit=limit)
 
@@ -612,14 +612,42 @@ def delete_catalog(catalog_id: int, db: Session = Depends(get_db), current_user:
     crud.delete_catalog(db, catalog_id=catalog_id)
     return {"detail": "Catalog and all its tasks deleted successfully"}
 
-# --- Task endpoints ---
+# --- Enhanced Task endpoints ---
 @api_router.post("/tasks/", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)
-def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+def create_task_enhanced(task: schemas.TaskCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     # Verify catalog belongs to user
     catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
     if not catalog or catalog.user_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to add tasks to this catalog")
-    return crud.create_task(db=db, task=task)
+    
+    # Create the main task
+    db_task = crud.create_task(db=db, task=task)
+    
+    # If repeat_days are specified, create daily_task entries
+    if task.repeat_days:
+        for day in task.repeat_days:
+            daily_task_data = schemas.DailyTaskCreate(
+                task_id=db_task.task_id,
+                day_week=day
+            )
+            crud.create_daily_task(db=db, daily_task=daily_task_data)
+    
+    # Refresh to get daily_tasks
+    db.refresh(db_task)
+    return db_task
+
+@api_router.get("/tasks/{task_id}", response_model=schemas.Task)
+def get_task_details(task_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    task = crud.get_task(db, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Verify task belongs to user's catalog
+    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
+    if not catalog or catalog.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this task")
+    
+    return task
 
 @api_router.get("/catalogs/{catalog_id}/tasks", response_model=List[schemas.Task])
 def get_catalog_tasks(catalog_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -629,8 +657,31 @@ def get_catalog_tasks(catalog_id: int, skip: int = 0, limit: int = 100, db: Sess
         raise HTTPException(status_code=403, detail="Not authorized to view tasks in this catalog")
     return crud.get_catalog_tasks(db, catalog_id=catalog_id, skip=skip, limit=limit)
 
+@api_router.put("/tasks/{task_id}", response_model=schemas.Task)
+def update_task_enhanced(
+    task_id: int, 
+    task_update: schemas.TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Verify task belongs to user
+    task = crud.get_task(db, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Запрещаем редактирование экземпляров ежедневных задач
+    if hasattr(task, 'is_daily_instance') and task.is_daily_instance:
+        raise HTTPException(status_code=400, detail="Daily task instances cannot be edited")
+    
+    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
+    if not catalog or catalog.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this task")
+    
+    updated_task = crud.update_task_enhanced(db, task_id=task_id, task_update=task_update)
+    return updated_task
+
 @api_router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+def delete_task_enhanced(task_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     # Verify task belongs to user's catalog
     task = crud.get_task(db, task_id=task_id)
     if not task:
@@ -640,8 +691,109 @@ def delete_task(task_id: int, db: Session = Depends(get_db), current_user: model
     if not catalog or catalog.user_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this task")
     
-    crud.delete_task(db, task_id=task_id)
+    crud.delete_task_enhanced(db, task_id=task_id)
     return {"detail": "Task deleted successfully"}
+
+@api_router.patch("/tasks/{task_id}/completion", response_model=schemas.Task)
+def update_task_completion_enhanced(
+    task_id: int, 
+    completed_status: schemas.TaskUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    # Verify task belongs to user's catalog
+    task = crud.get_task(db, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
+    if not catalog or catalog.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this task")
+    
+    if completed_status.completed is None:
+        raise HTTPException(status_code=400, detail="Completed status must be provided ('true' or 'false')")
+    
+    rewards = {
+        "easy": [10, 20],
+        "normal": [30, 40],
+        "hard": [50, 80]
+    }
+    
+    updated_task = crud.update_task_completion(db=db, task_id=task_id, completed=completed_status.completed, user_id=current_user.user_id)
+    
+    # Награды выдаем только при выполнении задачи
+    if completed_status.completed == 'true':
+        crud.update_user_gold_xp(
+            db,
+            user_id=current_user.user_id,
+            gold_change=rewards[task.complexity][0],
+            points_change=rewards[task.complexity][1]
+        )
+    
+    return updated_task
+
+# --- Daily Tasks Management endpoints ---
+@api_router.post("/daily-tasks/create-instances", response_model=List[schemas.Task])
+def create_daily_task_instances(
+    target_date: Optional[date] = None,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """Создание экземпляров ежедневных задач на указанную дату (по умолчанию - сегодня)"""
+    if not target_date:
+        target_date = date.today()
+    
+    instances = crud.create_daily_instances_for_date(db, current_user.user_id, target_date)
+    return instances
+
+@api_router.delete("/daily-tasks/cleanup")
+def cleanup_old_daily_instances(
+    cutoff_days: int = 7,  # По умолчанию удаляем выполненные задачи старше недели
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """Очистка старых ВЫПОЛНЕННЫХ экземпляров ежедневных задач"""
+    cutoff_date = date.today() - timedelta(days=cutoff_days)
+    deleted_count = crud.cleanup_old_daily_instances(db, current_user.user_id, cutoff_date)
+    return {"deleted_completed_instances": deleted_count, "cutoff_date": cutoff_date}
+
+@api_router.post("/daily-tasks/maintain")
+def maintain_daily_tasks(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """Автоматическое обслуживание ежедневных задач"""
+    result = crud.maintain_daily_tasks_for_user(db, current_user.user_id)
+    return result
+
+@api_router.get("/tasks/for-date/{target_date}", response_model=List[schemas.Task])
+def get_tasks_for_date(
+    target_date: date,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """Получение всех задач на конкретную дату"""
+    tasks = crud.get_tasks_for_date(db, current_user.user_id, target_date)
+    return tasks
+
+@api_router.get("/tasks/daily", response_model=List[schemas.Task])
+def get_user_daily_tasks(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """Получение всех ежедневных задач пользователя"""
+    daily_tasks = crud.get_daily_tasks_for_user(db, current_user.user_id)
+    return daily_tasks
+
+@api_router.get("/tasks/overdue", response_model=List[schemas.Task])
+def get_overdue_tasks(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_active_user)
+):
+    """Получение просроченных задач"""
+    current_date = date.today()
+    overdue_tasks = crud.get_overdue_tasks(db, current_user.user_id, current_date)
+    return overdue_tasks
 
 # --- DailyTask endpoints ---
 @api_router.post("/daily-tasks/", response_model=schemas.DailyTask, status_code=status.HTTP_201_CREATED)
@@ -669,69 +821,6 @@ def get_task_daily_tasks(task_id: int, db: Session = Depends(get_db), current_us
         raise HTTPException(status_code=403, detail="Not authorized to view daily tasks for this task")
     
     return crud.get_task_daily_tasks(db, task_id=task_id)
-
-@api_router.put("/tasks/{task_id}", response_model=schemas.Task)
-def update_task(
-    task_id: int, 
-    task_update: schemas.TaskUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user)
-):
-    # Verify task belongs to user
-    task = crud.get_task(db, task_id=task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
-    if not catalog or catalog.user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this task")
-    
-    # Handle task completion rewards
-    if task_update.completed is True and not task.completed:
-
-        crud.update_user_gold_xp(
-            db, 
-            user_id=current_user.user_id,
-            gold_change=experience_reward,
-            points_change=gold_reward
-        )
-    
-    updated_task = crud.update_task(db, task_id=task_id, task_update=task_update)
-    return updated_task
-
-
-@api_router.patch("/tasks/{task_id}/completion", response_model=schemas.Task)
-def update_task_completion(
-    task_id: int, 
-    completed_status: schemas.TaskUpdate, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_active_user)
-):
-    # Verify task belongs to user's catalog
-    task = crud.get_task(db, task_id=task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    catalog = crud.get_catalog(db, catalog_id=task.catalog_id)
-    if not catalog or catalog.user_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this task")
-    
-    if completed_status.completed is None:
-        raise HTTPException(status_code=400, detail="Completed status must be provided ('true' or 'false')")
-    
-    rewards = {
-        "easy": [10, 20],
-        "normal": [30, 40],
-        "hard": [50, 80]
-    }
-    
-    updated_task = crud.update_task_completion(db=db, task_id=task_id, completed=completed_status.completed, user_id=current_user.user_id)
-    crud.update_user_gold_xp(
-        db,
-        user_id=current_user.user_id,
-        gold_change=rewards[task.complexity][0],
-        points_change=rewards[task.complexity][1])
-    return updated_task
 
 # --- WebSocket для чата ---
 class TeamConnectionManager:
@@ -860,6 +949,31 @@ async def websocket_endpoint(websocket: WebSocket, room_name: str, token: str, d
 
 # Подключаем API роутер
 app.include_router(api_router, prefix="/api")
+
+# Добавляем middleware для автоматического обслуживания ежедневных задач
+@app.middleware("http")
+async def daily_tasks_maintenance_middleware(request: Request, call_next):
+    """Middleware для автоматического обслуживания ежедневных задач"""
+    response = await call_next(request)
+    
+    # Проверяем, нужно ли выполнить обслуживание ежедневных задач
+    # Делаем это только для запросов к каталогам, чтобы не перегружать систему
+    if (request.url.path.startswith("/api/catalogs/") and 
+        request.method == "GET" and 
+        response.status_code == 200):
+        
+        try:
+            # Получаем токен из заголовка
+            auth_header = request.headers.get("authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                # Здесь можно добавить фоновую задачу для обслуживания ежедневных задач
+                # Пока оставляем пустым, так как обслуживание происходит на фронтенде
+                pass
+        except Exception as e:
+            # Логируем ошибку, но не прерываем обработку запроса
+            print(f"Daily tasks maintenance error: {e}")
+    
+    return response
 
 # Обслуживание фронтенда
 @app.get("/{path:path}", response_class=HTMLResponse)

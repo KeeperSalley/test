@@ -4,7 +4,233 @@ from sqlalchemy.orm import joinedload
 from . import models, schemas, security
 import json
 import random # For boss attack simulation
+from datetime import datetime, date, timedelta
+from typing import List, Optional
 
+# --- Enhanced Task CRUD ---
+def create_task(db: Session, task: schemas.TaskCreate):
+    """Создание задачи с поддержкой ежедневных повторений"""
+    # Исключаем поля, которых нет в модели Task
+    task_data = task.dict(exclude={"repeat_days"})
+    db_task = models.Task(**task_data)
+    db.add(db_task)
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+def create_daily_task_instance(db: Session, original_task_id: int, target_date: date, user_id: int):
+    """Создание экземпляра ежедневной задачи на конкретную дату"""
+    # Получаем оригинальную задачу
+    original_task = get_task(db, original_task_id)
+    if not original_task:
+        return None
+    
+    # Проверяем, что задача принадлежит пользователю
+    catalog = get_catalog(db, original_task.catalog_id)
+    if not catalog or catalog.user_id != user_id:
+        return None
+    
+    # Проверяем, нет ли уже экземпляра на эту дату
+    existing_instance = db.query(models.Task).filter(
+        models.Task.parent_task_id == original_task_id,
+        models.Task.deadline == target_date,
+        models.Task.is_daily_instance == True
+    ).first()
+    
+    if existing_instance:
+        return existing_instance
+    
+    # Создаем новый экземпляр
+    instance_data = {
+        "catalog_id": original_task.catalog_id,
+        "name": original_task.name,
+        "complexity": original_task.complexity,
+        "deadline": target_date,
+        "completed": 'false',
+        "parent_task_id": original_task_id,
+        "is_daily_instance": True
+    }
+    
+    db_instance = models.Task(**instance_data)
+    db.add(db_instance)
+    db.commit()
+    db.refresh(db_instance)
+    return db_instance
+
+def get_tasks_for_date(db: Session, user_id: int, target_date: date):
+    """Получение всех задач пользователя на конкретную дату"""
+    # Получаем каталоги пользователя
+    user_catalogs = get_user_catalogs(db, user_id)
+    catalog_ids = [catalog.catalog_id for catalog in user_catalogs]
+    
+    if not catalog_ids:
+        return []
+    
+    # Получаем задачи с дедлайном на эту дату
+    deadline_tasks = db.query(models.Task).filter(
+        models.Task.catalog_id.in_(catalog_ids),
+        models.Task.deadline == target_date
+    ).all()
+    
+    # Получаем ежедневные задачи, которые должны выполняться в этот день
+    day_name = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][target_date.weekday()]
+    
+    daily_tasks = db.query(models.Task).join(models.DailyTask).filter(
+        models.Task.catalog_id.in_(catalog_ids),
+        models.DailyTask.day_week == day_name,
+        models.Task.is_daily_instance == False  # Только оригинальные задачи
+    ).all()
+    
+    return deadline_tasks + daily_tasks
+
+def create_daily_instances_for_date(db: Session, user_id: int, target_date: date):
+    """Создание экземпляров ежедневных задач на конкретную дату"""
+    day_name = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][target_date.weekday()]
+    
+    # Получаем каталоги пользователя
+    user_catalogs = get_user_catalogs(db, user_id)
+    catalog_ids = [catalog.catalog_id for catalog in user_catalogs]
+    
+    if not catalog_ids:
+        return []
+    
+    # Находим все ежедневные задачи, которые должны выполняться в этот день
+    daily_tasks = db.query(models.Task).join(models.DailyTask).filter(
+        models.Task.catalog_id.in_(catalog_ids),
+        models.DailyTask.day_week == day_name,
+        models.Task.is_daily_instance == False
+    ).all()
+    
+    created_instances = []
+    
+    for task in daily_tasks:
+        # Проверяем, нет ли уже экземпляра на эту дату
+        existing_instance = db.query(models.Task).filter(
+            models.Task.parent_task_id == task.task_id,
+            models.Task.deadline == target_date,
+            models.Task.is_daily_instance == True
+        ).first()
+        
+        if not existing_instance:
+            instance = create_daily_task_instance(db, task.task_id, target_date, user_id)
+            if instance:
+                created_instances.append(instance)
+    
+    return created_instances
+
+def cleanup_old_daily_instances(db: Session, user_id: int, cutoff_date: date):
+    """Удаление старых ВЫПОЛНЕННЫХ экземпляров ежедневных задач"""
+    # Получаем каталоги пользователя
+    user_catalogs = get_user_catalogs(db, user_id)
+    catalog_ids = [catalog.catalog_id for catalog in user_catalogs]
+    
+    if not catalog_ids:
+        return 0
+    
+    # Находим старые ВЫПОЛНЕННЫЕ экземпляры (старше cutoff_date)
+    old_completed_instances = db.query(models.Task).filter(
+        models.Task.catalog_id.in_(catalog_ids),
+        models.Task.is_daily_instance == True,
+        models.Task.deadline < cutoff_date,
+        models.Task.completed == 'true'  # Только выполненные задачи
+    ).all()
+    
+    deleted_count = 0
+    for instance in old_completed_instances:
+        db.delete(instance)
+        deleted_count += 1
+    
+    if deleted_count > 0:
+        db.commit()
+    
+    return deleted_count
+
+def get_daily_tasks_for_user(db: Session, user_id: int):
+    """Получение всех ежедневных задач пользователя"""
+    user_catalogs = get_user_catalogs(db, user_id)
+    catalog_ids = [catalog.catalog_id for catalog in user_catalogs]
+    
+    if not catalog_ids:
+        return []
+    
+    # Получаем задачи с daily_tasks
+    daily_tasks = db.query(models.Task).join(models.DailyTask).filter(
+        models.Task.catalog_id.in_(catalog_ids),
+        models.Task.is_daily_instance == False
+    ).all()
+    
+    return daily_tasks
+
+def get_overdue_tasks(db: Session, user_id: int, current_date: date):
+    """Получение просроченных невыполненных задач пользователя"""
+    user_catalogs = get_user_catalogs(db, user_id)
+    catalog_ids = [catalog.catalog_id for catalog in user_catalogs]
+    
+    if not catalog_ids:
+        return []
+    
+    overdue_tasks = db.query(models.Task).filter(
+        models.Task.catalog_id.in_(catalog_ids),
+        models.Task.deadline < current_date,
+        models.Task.completed == 'false'
+    ).all()
+    
+    return overdue_tasks
+
+def update_task_enhanced(db: Session, task_id: int, task_update: schemas.TaskUpdate):
+    """Обновленная функция обновления задачи"""
+    db_task = get_task(db, task_id=task_id)
+    if not db_task:
+        return None
+    
+    update_data = task_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_task, key, value)
+    
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+def delete_task_enhanced(db: Session, task_id: int):
+    """Обновленная функция удаления задачи с обработкой экземпляров"""
+    db_task = get_task(db, task_id)
+    if not db_task:
+        return None
+    
+    # Если это родительская задача, удаляем все экземпляры
+    if not db_task.is_daily_instance:
+        # Удаляем все экземпляры этой задачи
+        db.query(models.Task).filter(
+            models.Task.parent_task_id == task_id
+        ).delete()
+        
+        # Удаляем связанные daily_tasks
+        db.query(models.DailyTask).filter(
+            models.DailyTask.task_id == task_id
+        ).delete()
+    
+    # Удаляем саму задачу
+    db.delete(db_task)
+    db.commit()
+    return db_task
+
+# Автоматическое обслуживание ежедневных задач
+def maintain_daily_tasks_for_user(db: Session, user_id: int):
+    """Автоматическое обслуживание ежедневных задач для пользователя"""
+    today = date.today()
+    week_ago = today - timedelta(days=7)  # Удаляем выполненные задачи старше недели
+    
+    # Создаем экземпляры на сегодня
+    created_today = create_daily_instances_for_date(db, user_id, today)
+    
+    # Удаляем старые ВЫПОЛНЕННЫЕ экземпляры (старше недели)
+    deleted_count = cleanup_old_daily_instances(db, user_id, week_ago)
+    
+    return {
+        "created_instances": len(created_today),
+        "deleted_completed_instances": deleted_count,
+        "date": today
+    }
 # --- User CRUD --- 
 def get_user(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.user_id == user_id).first()
