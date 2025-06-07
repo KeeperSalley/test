@@ -1,0 +1,345 @@
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #E7EFF0;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+  position: relative;
+}
+
+
+
+/* Основной хедер */
+.header1 {
+  min-width: 350px;
+  min-height: 80px;
+  background-color: #1A3C34;
+  display: flex;
+  align-items: center;
+  padding: 15px 25px;
+  gap: 25px;
+  position: relative;
+}
+
+.character-container1 {
+  width: 150px;
+  height: 150px;
+  background-color: #E7EFF0;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+  justify-content: space-between;
+  gap: 25px;
+  flex-wrap: wrap;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  margin-right: 30px;
+  margin-left: 30px;
+}
+
+.user-name {
+  color: white;
+  font-size: 30px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.user-level {
+  color: #AAAAAA;
+  font-size: 25px;
+}
+
+.character-line {
+  width: 2px;
+  height: 140px;
+  background-color: #226058;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.stats-container {
+  flex-grow: 1;
+  min-width: 200px;
+}
+
+.invisible-table {
+  width: auto; /* Убираем 100% ширину */
+  max-width: 600px; /* Максимальная ширина таблицы */
+  border-collapse: collapse;
+  font-size: 25px;
+  margin: 0 auto; /* Центрирование таблицы */
+}
+
+.invisible-table td {
+  padding: 10px 20px;
+  border: none;
+  vertical-align: middle;
+  white-space: nowrap; /* Запрет переноса текста */
+}
+
+.img-param {
+  padding: 0px 10px;
+}
+
+.user-motto {
+  color: #E7EFF0;
+  font-size: 25px;
+  flex: 1 1 200px; /* Гибкий размер, мин. ширина 300px */
+  line-height: 1.4;
+  text-align: left;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  align-self: center; /* Выравнивание по вертикали */
+ 
+  /* Центрирование блока и текста */
+  display: flex;
+  flex-direction: column;
+  align-items: center;  /* Центрирование по горизонтали */
+  justify-content: center; /* Центрирование по вертикали */
+  text-align: center; /* Центрирование текста внутри */
+  
+  /* Управление переносами */
+  word-break: break-word;
+  hyphens: auto;
+  
+  /* Адаптивные размеры */
+  max-width: 80ch; /* Оптимальная ширина для чтения */
+  margin: 0 auto; /* Автоматические отступы для центрирования */
+  padding: 15px;
+  
+}
+
+
+/* Боковое меню для десктопа */
+.header2 {
+  width: 100px;
+  background-color: #226058;
+  position: absolute;
+  top: 180px;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.character-container2 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 20px 0;
+}
+
+.nav-link {
+  width: 80px;
+  height: 80px;
+  transition: all 0.3s ease;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+  margin-bottom: 25px;
+}
+
+.nav-link:hover {
+  transform: scale(1.1);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-link img {
+  width: 80%;
+  height: 80%;
+}
+
+.active {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  position: relative;
+}
+
+
+
+/* Мобильное меню */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 1001;
+}
+
+.mobile-menu {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background-color: rgba(26, 60, 52, 0.95);
+  z-index: 1000;
+  padding: 60px 20px 20px;
+  box-sizing: border-box;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+}
+
+.mobile-menu.active {
+  transform: translateX(0);
+}
+
+.mobile-menu-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  height: 100%;
+}
+
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: white;
+  text-decoration: none;
+  padding: 15px;
+  border-radius: 5px;
+  transition: background-color 0.3s;
+  font-size: 18px;
+}
+
+.mobile-nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.mobile-nav-link img {
+  width: 40px;
+  height: 40px;
+}
+
+.close-menu-btn {
+  position: absolute;
+  top: 15px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 30px;
+  cursor: pointer;
+}
+
+
+
+
+/* Адаптация для мобильных устройств */
+@media (max-width: 1400px) {
+  .header-content {
+      gap: 15px;
+  }
+  
+  .character-line {
+      height: 140px;
+  }
+  
+  .user-motto {
+      display: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  .header1 {
+    flex-direction: row; /* Оставляем горизонтальное расположение */
+    align-items: center;
+    padding: 10px;
+    gap: 10px;
+}
+  
+  .character-container1 {
+      width: 180px;
+      height: 180px;
+      align-self: center;
+      margin-bottom: 10px;
+  }
+  
+  .header-content {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+  }
+  
+  .character-line {
+      width: 100%;
+      height: 2px;
+  }
+  
+  .user-info {
+      text-align: center;
+  }
+  
+  .stats-container {
+      width: 100%;
+  }
+  
+  .header2 {
+      display: none;
+  }
+  
+  .main-content {
+      margin-left: 0;
+  }
+  
+  .mobile-menu-btn {
+      display: block;
+  }
+
+  .active {
+    display: none;
+}
+}
+
+@media (max-width: 600px) {
+  .character-container1 {
+      width: 80px;
+      height: 80px;
+  }
+  
+  .user-name {
+      font-size: 14px;
+
+  }
+  
+  .user-level {
+      font-size: 12px;
+  }
+  
+  .invisible-table td {
+      padding: 4px 10px;
+      font-size: 12px;
+  } 
+  .img-param{
+    width: 12%;
+  }
+
+  .character-line {
+    display: none;
+}
+
+.stats-container {
+  width: 0%;
+}
+
+}

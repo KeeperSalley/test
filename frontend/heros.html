@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор персонажа</title>
+    <link rel="stylesheet" href="style/heros.css">
+</head>
+<body>
+    <div class="content-wrapper">
+        <h1 class="centered-title">Выберите класс персонажа</h1>
+        <form id="characterForm">
+            <div class="rectangles-container">
+                <label class="radio-rectangle">
+                    <input type="radio" name="characterClass" value="1" data-photo="images/warrior">
+                    <div class="rectangle-content">
+                        <div class="image-container">
+                            <img src="" class="character-image" data-class="warrior">
+                        </div>
+                        <div class="taxt-content">
+                            <p>Воин</p>
+                            <p style="color: #86D7FF;">Имеет бонус к атаке и увеличенный шанс получить вещь после победы над боссом.</p>
+                            <hr>
+                            <p>"Сильный и решительный, Воин быстрее побеждает мощных врагов вместе с командой и получает больше наград для себя."</p>
+                        </div>
+                    </div>
+                </label>
+
+                <label class="radio-rectangle">
+                    <input type="radio" name="characterClass" value="2" data-photo="images/mage">
+                    <div class="rectangle-content">
+                        <div class="image-container">
+                            <img src="" class="character-image" data-class="mage">
+                        </div>
+                        <div class="taxt-content">
+                            <p>Маг</p>
+                            <p style="color: #A2FF86;">Получает больше опыта за выполнение задач.</p>
+                            <hr>
+                            <p>"Любознательный и амбициозный, Маг стремится к знаниям и быстро прогрессирует, чтобы достичь новых высот."</p>
+                        </div>
+                    </div>
+                </label>
+
+                <label class="radio-rectangle">
+                    <input type="radio" name="characterClass" value="3" data-photo="images/bard">
+                    <div class="rectangle-content">
+                        <div class="image-container">
+                            <img src="" class="character-image" data-class="bard">
+                        </div>
+                        <div class="taxt-content">
+                            <p>Бард</p>
+                            <p style="color: #FFFC94;">Получает больше золота за задачи и победы над боссами.</p>
+                            <hr>
+                            <p>"Харизматичный и удачливый, Бард умеет превращать успех в богатство, которое можно потратить на полезные вещи."</p>
+                        </div>
+                    </div>
+                </label>
+
+                <label class="radio-rectangle">
+                    <input type="radio" name="characterClass" value="4" data-photo="images/priest">
+                    <div class="rectangle-content">
+                        <div class="image-container">
+                            <img src="" class="character-image" data-class="priest">
+                        </div>
+                        <div class="taxt-content">
+                            <p>Жрец</p>
+                            <p style="color: #FF9496;">Получает меньше урона при провале задач.</p>
+                            <hr>
+                            <p>"Спокойный и стойкий, Жрец прощает ошибки и помогает преодолевать трудности даже в самые загруженные дни."</p>
+                        </div>
+                    </div>
+                </label>
+            </div>
+            <div class="gender-selection" style="text-align: center; margin-bottom: 20px;">
+                <p>Выберите пол вашего персонажа (это повлияет на изображение):</p>
+                <label><input type="radio" name="gender" value="male" checked> Мужской</label>
+                <label><input type="radio" name="gender" value="female"> Женский</label>
+            </div>
+            <button type="submit">Подтвердить выбор</button>
+            <p class="msg" id="heroMessage" style="text-align: center; margin-top: 15px;"></p>
+        </form>
+    </div>
+
+    <script>
+        const API_BASE_URL = "/api"; // Changed to relative path for API prefix
+        let selectedGender = document.querySelector("input[name=\"gender\"]:checked").value;
+        const genderSuffix = () => selectedGender === "male" ? "-M" : "-F";
+
+        function updateCharacterImages() {
+            document.querySelectorAll(".character-image").forEach(imgi => {
+                const characterClass = imgi.getAttribute("data-class");
+                // Ensure image paths are relative to the HTML file or root if served that way
+                imgi.src = `images/${characterClass}${genderSuffix()}.svg`; 
+            });
+        }
+        
+        document.querySelectorAll("input[name=\"gender\"]").forEach(radio => {
+            radio.addEventListener("change", function() {
+                selectedGender = this.value;
+                updateCharacterImages();
+            });
+        });
+
+        updateCharacterImages();
+
+        document.getElementById("characterForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+            const messageElement = document.getElementById("heroMessage");
+            messageElement.textContent = ""; 
+
+            const selectedClassRadio = document.querySelector("input[name=\"characterClass\"]:checked");
+            
+            if (!selectedClassRadio) {
+                messageElement.textContent = "Пожалуйста, выберите класс персонажа";
+                messageElement.style.color = "red";
+                return;
+            }
+
+            const userClass = selectedClassRadio.value;
+            const photoBase = selectedClassRadio.getAttribute("data-photo");
+            // Photo URL should be relative to how static files are served by FastAPI
+            // If /images is mounted at root, then "images/classname.svg" is correct.
+            const photoUrl = `${photoBase}${genderSuffix()}.svg`;
+
+            
+
+            const token = localStorage.getItem("access_token");
+            if (!token) {
+                messageElement.textContent = "Ошибка: Вы не авторизованы. Пожалуйста, войдите.";
+                messageElement.style.color = "red";
+                setTimeout(() => { window.location.href = "auth.html"; }, 2000);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/users/me`, { // Uses updated API_BASE_URL
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        class_id: userClass,
+                        img: photoUrl, // This will be stored as "images/warrior-M.svg" etc.
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    messageElement.textContent = "Класс и персонаж успешно выбраны! Перенаправление в профиль...";
+                    messageElement.style.color = "green";
+                    setTimeout(() => {
+                        window.location.href = "profile.html"; 
+                    }, 2000);
+                } else {
+                    messageElement.textContent = `Ошибка обновления профиля: ${data.detail || "Неизвестная ошибка"}`;
+                    messageElement.style.color = "red";
+                }
+            } catch (error) {
+                console.error("Hero selection error:", error);
+                messageElement.textContent = "Произошла ошибка при подключении к серверу.";
+                messageElement.style.color = "red";
+            }
+        });
+
+        if (!localStorage.getItem("access_token")) {
+            const messageElement = document.getElementById("heroMessage");
+            if(messageElement) {
+                 messageElement.textContent = "Пожалуйста, войдите, чтобы выбрать героя.";
+                 messageElement.style.color = "orange";
+            }
+        }
+    </script>
+</body>
+</html>
